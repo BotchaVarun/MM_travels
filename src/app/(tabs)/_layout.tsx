@@ -1,7 +1,6 @@
 import { colors } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
-import React from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -26,7 +25,7 @@ export default function TabLayout() {
                 name="index"
                 options={{
                     title: 'Home',
-                    tabBarIcon: ({ color, focused }: { color: string; focused: boolean }) => (
+                    tabBarIcon: ({ color, focused }: { color: any; focused: boolean }) => (
                         <View style={[styles.iconContainer, focused && styles.iconContainerActive]}>
                             <Ionicons name={focused ? 'home' : 'home-outline'} size={24} color={color} />
                         </View>
@@ -37,7 +36,7 @@ export default function TabLayout() {
                 name="services"
                 options={{
                     title: 'Services',
-                    tabBarIcon: ({ color, focused }: { color: string; focused: boolean }) => (
+                    tabBarIcon: ({ color, focused }: { color: any; focused: boolean }) => (
                         <View style={[styles.iconContainer, focused && styles.iconContainerActive]}>
                             <Ionicons name={focused ? 'grid' : 'grid-outline'} size={24} color={color} />
                         </View>
@@ -48,7 +47,7 @@ export default function TabLayout() {
                 name="activity"
                 options={{
                     title: 'Activity',
-                    tabBarIcon: ({ color, focused }: { color: string; focused: boolean }) => (
+                    tabBarIcon: ({ color, focused }: { color: any; focused: boolean }) => (
                         <View style={[styles.iconContainer, focused && styles.iconContainerActive]}>
                             <Ionicons name={focused ? 'receipt' : 'receipt-outline'} size={24} color={color} />
                         </View>
@@ -59,7 +58,7 @@ export default function TabLayout() {
                 name="account"
                 options={{
                     title: 'Account',
-                    tabBarIcon: ({ color, focused }: { color: string; focused: boolean }) => (
+                    tabBarIcon: ({ color, focused }: { color: any; focused: boolean }) => (
                         <View style={[styles.iconContainer, focused && styles.iconContainerActive]}>
                             <Ionicons name={focused ? 'person' : 'person-outline'} size={24} color={color} />
                         </View>

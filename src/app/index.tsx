@@ -3,24 +3,20 @@ import { colors } from '@/constants/theme';
 import { useRouter } from 'expo-router';
 import { useEffect } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function SplashScreenComponent() {
   const router = useRouter();
-  const opacity = useSharedValue(0);
+  const opacity = useSharedValue(1); // Start fully visible to match Native OS instantly
 
   useEffect(() => {
-    // Fade in animation
-    opacity.value = withTiming(1, {
-      duration: 800,
-      easing: Easing.out(Easing.ease),
-    });
+    // We removed the opacity fade because it causes a blink.
 
-    // Simulate < 1.8s cold launch budget and route
+    // Extend splash time to 2.5s total before routing
     const timer = setTimeout(() => {
       router.replace('/onboarding');
-    }, 1800);
+    }, 2500);
 
     return () => clearTimeout(timer);
   }, [router]);

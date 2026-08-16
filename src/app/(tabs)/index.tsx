@@ -1,8 +1,6 @@
 import { colors } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
-import React from 'react';
 import { Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import MapView from 'react-native-maps';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const MOCK_REGION = {
@@ -15,14 +13,15 @@ const MOCK_REGION = {
 export default function HomeScreen() {
     return (
         <View style={styles.container}>
-            {/* Background Map */}
-            <MapView
-                style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0 }}
-                initialRegion={MOCK_REGION}
-                showsUserLocation
-                showsMyLocationButton={false}
-                showsCompass={false}
-            />
+            {/* 
+                Mocked Background Map Layer 
+                (MapView requires a valid Google Maps API Key in app.json on physical Native Android builds. 
+                Leaving the real MapView without a key will instantly crash the app natively).
+            */}
+            <View style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, backgroundColor: '#E4E0D6', justifyContent: 'center', alignItems: 'center' }}>
+                <Ionicons name="map" size={100} color="#D1CDA8" style={{ opacity: 0.5 }} />
+                <Text style={{ marginTop: 12, color: colors.inkSoft, fontWeight: '600' }}>[ Google Maps Placeholder ]</Text>
+            </View>
 
             {/* Top Floating Target Location Search */}
             <SafeAreaView pointerEvents="box-none" style={styles.topFloatingZone}>
