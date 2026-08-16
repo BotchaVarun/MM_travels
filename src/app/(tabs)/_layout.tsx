@@ -17,8 +17,9 @@ export default function TabLayout() {
                 tabBarStyle: [
                     styles.tabBar,
                     {
-                        height: Platform.OS === 'ios' ? 84 : 68,
-                        paddingBottom: Platform.OS === 'ios' ? 24 : 8
+                        height: Platform.OS === 'ios' ? 76 : 60,
+                        paddingBottom: Platform.OS === 'ios' ? 24 : 6,
+                        paddingTop: 8,
                     }
                 ],
                 tabBarLabelStyle: styles.tabBarLabel,
@@ -31,7 +32,7 @@ export default function TabLayout() {
                     title: 'Ride',
                     tabBarIcon: ({ color, focused }) => (
                         <View style={[styles.iconContainer]}>
-                            <Ionicons name={focused ? 'home' : 'home-outline'} size={24} color={color} />
+                            <Ionicons name={focused ? 'home' : 'home-outline'} size={22} color={color} />
                         </View>
                     ),
                 }}
@@ -43,7 +44,7 @@ export default function TabLayout() {
                     title: 'All Services',
                     tabBarIcon: ({ color, focused }) => (
                         <View style={[styles.iconContainer]}>
-                            <Ionicons name={focused ? 'grid' : 'grid-outline'} size={24} color={color} />
+                            <Ionicons name={focused ? 'grid' : 'grid-outline'} size={22} color={color} />
                         </View>
                     ),
                 }}
@@ -55,7 +56,7 @@ export default function TabLayout() {
                     title: 'Travel',
                     tabBarIcon: ({ color, focused }) => (
                         <View style={[styles.iconContainer]}>
-                            <Ionicons name={focused ? 'map' : 'map-outline'} size={24} color={color} />
+                            <Ionicons name={focused ? 'rocket' : 'rocket-outline'} size={22} color={color} />
                         </View>
                     ),
                 }}
@@ -66,7 +67,7 @@ export default function TabLayout() {
                     title: 'Profile',
                     tabBarIcon: ({ color, focused }) => (
                         <View style={[styles.iconContainer]}>
-                            <Ionicons name={focused ? 'person' : 'person-outline'} size={24} color={color} />
+                            <Ionicons name={focused ? 'person' : 'person-outline'} size={22} color={color} />
                         </View>
                     ),
                 }}
@@ -85,16 +86,15 @@ const styles = StyleSheet.create({
     tabBar: {
         backgroundColor: colors.white,
         borderTopWidth: 1,
-        borderTopColor: '#F3F4F6', // Subtle top shadow/border per spec
-        paddingTop: 8,
-        elevation: 8, // slight shadow above
+        borderTopColor: '#F1F5F9', // Subtle top shadow/border per spec
+        elevation: 16, // strong shadow
         shadowColor: "#000",
         shadowOffset: { width: 0, height: -2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
     },
     tabBarLabel: {
-        fontSize: 11,
+        fontSize: 10,
         fontWeight: '600',
         marginTop: 2,
     },

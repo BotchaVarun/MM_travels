@@ -1,24 +1,30 @@
 import { colors } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
+import { Camera, Map } from '@maplibre/maplibre-react-native'; // Native MapEngine Replacement
 import { useEffect, useRef, useState } from 'react';
 import { Dimensions, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import MapView, { Region, UrlTile } from 'react-native-maps';
 import { useUserLocation } from '../../hooks/useUserLocation';
 import { formatAddress, reverseGeocode } from '../../services/location/geocodingService';
 import { Address, Coordinate } from '../../types/location';
 
 // Default fallback region (Visakhapatnam) — used only until real GPS arrives
-const DEFAULT_REGION: Region = {
+const DEFAULT_COORD: Coordinate = {
     latitude: 17.6868,
     longitude: 83.2185,
-    latitudeDelta: 0.01,
-    longitudeDelta: 0.01,
 };
 
 const SCREEN_HEIGHT = Dimensions.get('window').height;
 
+export interface DriverLocation {
+    driverId: string;
+    latitude: number;
+    longitude: number;
+    heading?: number;
+}
+
 interface HomeMapProps {
     onPickupLocationChange: (coordinate: Coordinate, address: Address | null) => void;
+    driverLocations?: DriverLocation[]; // Future Phase Integration
 }
 
 // Leaflet HTML source document for web rendering
@@ -95,7 +101,8 @@ const leafletHtml = `
 `;
 
 export default function HomeMap({ onPickupLocationChange }: HomeMapProps) {
-    const mapRef = useRef<MapView>(null);
+    const mapRef = useRef<any>(null); // MapLibre General Ref
+    const cameraRef = useRef<any>(null); // MapLibre Camera Ref
     const iframeRef = useRef<any>(null);
     const { currentUserLocation } = useUserLocation();
 
@@ -103,6 +110,7 @@ export default function HomeMap({ onPickupLocationChange }: HomeMapProps) {
     const [pickupCoord, setPickupCoord] = useState<Coordinate | null>(null);
     const [pickupAddress, setPickupAddress] = useState<Address | null>(null);
     const [initialRegionSet, setInitialRegionSet] = useState(false);
+    const [isGeocoding, setIsGeocoding] = useState(false);
 
     const geocodeRequestId = useRef(0);
 
@@ -142,12 +150,11 @@ export default function HomeMap({ onPickupLocationChange }: HomeMapProps) {
                         zoom: 15
                     }, '*');
                 } else {
-                    mapRef.current?.animateToRegion({
-                        latitude: currentUserLocation.latitude,
-                        longitude: currentUserLocation.longitude,
-                        latitudeDelta: 0.005,
-                        longitudeDelta: 0.005,
-                    }, 1000);
+                    cameraRef.current?.flyTo({
+                        center: [currentUserLocation.longitude, currentUserLocation.latitude],
+                        zoom: 14,
+                        duration: 1000,
+                    });
                 }
                 setInitialRegionSet(true);
                 handleSettledCoord(currentUserLocation);
@@ -158,28 +165,57 @@ export default function HomeMap({ onPickupLocationChange }: HomeMapProps) {
     // ---- Fallback initialization when map is ready and GPS is slow/unavailable ----
     useEffect(() => {
         if (mapReady && !initialRegionSet && !currentUserLocation && !pickupCoord) {
-            handleSettledCoord(DEFAULT_REGION);
+            handleSettledCoord(DEFAULT_COORD);
         }
     }, [mapReady, initialRegionSet, currentUserLocation, pickupCoord]);
 
     // ---- Reverse-geocode the settled coordinate ----
     const handleSettledCoord = async (coord: Coordinate) => {
         setPickupCoord(coord);
+        setIsGeocoding(true);
         const currentReqId = ++geocodeRequestId.current;
         const addressData = await reverseGeocode(coord);
         if (currentReqId === geocodeRequestId.current) {
             setPickupAddress(addressData);
+            setIsGeocoding(false);
             onPickupLocationChange(coord, addressData);
         }
     };
 
-    // ---- Map gesture callbacks ----
-    const handleRegionChangeComplete = (region: Region, details: { isGesture?: boolean }) => {
-        if (details?.isGesture) {
-            handleSettledCoord({
-                latitude: region.latitude,
-                longitude: region.longitude,
-            });
+    // ---- MapLibre native gesture callbacks ----
+    const handleRegionDidChange = async (event: any) => {
+        // Native MapLibre wraps event payloads in nativeEvent.
+        // We drop the strict 'isUserInteraction' boolean flag check here because some custom Android ROMs 
+        // drop this property during rapid panning NativeSyntheticEvents, creating silent UI failures.
+        // Fast redundant hooks are completely safely neutralized by the geocoding coordinate-level deduplication cache.
+
+        let longitude: number | undefined;
+        let latitude: number | undefined;
+
+        // 1. Ask MapLibre directly for the mathematically true viewport center
+        if (Platform.OS !== 'web' && mapRef.current) {
+            try {
+                const center = await mapRef.current.getCenter();
+                if (center && Array.isArray(center)) {
+                    [longitude, latitude] = center;
+                }
+            } catch (e) {
+                console.warn("Could not retrieve center directly from map instance", e);
+            }
+        }
+
+        // 2. Fallback to event payloads structurally
+        if (!longitude || !latitude) {
+            const nativeCenter = event?.nativeEvent?.center;
+            if (nativeCenter && Array.isArray(nativeCenter)) {
+                [longitude, latitude] = nativeCenter;
+            } else if (event?.geometry?.coordinates) {
+                [longitude, latitude] = event.geometry.coordinates;
+            }
+        }
+
+        if (longitude && latitude) {
+            handleSettledCoord({ latitude, longitude });
         }
     };
 
@@ -195,12 +231,11 @@ export default function HomeMap({ onPickupLocationChange }: HomeMapProps) {
             }, '*');
             handleSettledCoord(currentUserLocation);
         } else {
-            mapRef.current?.animateToRegion({
-                latitude: currentUserLocation.latitude,
-                longitude: currentUserLocation.longitude,
-                latitudeDelta: 0.005,
-                longitudeDelta: 0.005,
-            }, 1000);
+            cameraRef.current?.flyTo({
+                center: [currentUserLocation.longitude, currentUserLocation.latitude],
+                zoom: 14,
+                duration: 1000,
+            });
             handleSettledCoord(currentUserLocation);
         }
     };
@@ -210,73 +245,66 @@ export default function HomeMap({ onPickupLocationChange }: HomeMapProps) {
     return (
         <View style={styles.container}>
 
-            {/* ===================== MAP ===================== */}
-            {Platform.OS === 'web' ? (
-                <iframe
-                    ref={iframeRef}
-                    srcDoc={leafletHtml}
-                    style={{
-                        width: '100%',
-                        height: '100%',
-                        border: 'none',
-                    }}
-                />
-            ) : (
-                <MapView
-                    ref={mapRef}
-                    style={styles.map}
-                    initialRegion={DEFAULT_REGION}
-                    showsUserLocation={true}
-                    showsMyLocationButton={false}
-                    showsCompass={false}
-                    onMapReady={() => setMapReady(true)}
-                    onRegionChangeComplete={handleRegionChangeComplete}
-                    mapType={Platform.OS === 'android' ? 'none' : 'standard'}
-                >
-                    <UrlTile
-                        urlTemplate="https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png"
-                        maximumZ={19}
-                        flipY={false}
-                        shouldReplaceMapContent={true}
-                        zIndex={1}
+            {/* ===================== MAP VIEWPORT ENCLOSURE ===================== */}
+            <View style={styles.mapWrapper}>
+                {/* --- Map Layer --- */}
+                {Platform.OS === 'web' ? (
+                    <iframe
+                        ref={iframeRef}
+                        srcDoc={leafletHtml}
+                        style={{
+                            width: '100%',
+                            height: '100%',
+                            border: 'none',
+                        }}
                     />
-                </MapView>
-            )}
-
-            {/* ============= FIXED CENTER PICKUP CURSOR ============= */}
-            <View style={styles.pickupMarkerContainer} pointerEvents="none">
-                {/* The pointer pin (above the center point) */}
-                <View style={styles.pointerPin}>
-                    <View style={styles.pickupPill}>
-                        <Text style={styles.pickupPillText}>Pickup Point</Text>
+                ) : (
+                    <View style={StyleSheet.absoluteFill}>
+                        <Map
+                            ref={mapRef}
+                            style={styles.map}
+                            mapStyle="https://tiles.openfreemap.org/styles/liberty"
+                            logo={false}
+                            attribution={true}
+                            onDidFinishLoadingStyle={() => setMapReady(true)}
+                            onRegionDidChange={handleRegionDidChange}
+                        >
+                            <Camera
+                                ref={cameraRef}
+                                initialViewState={{
+                                    center: [DEFAULT_COORD.longitude, DEFAULT_COORD.latitude],
+                                    zoom: 15,
+                                }}
+                            />
+                        </Map>
                     </View>
-                    <View style={styles.pickupStem} />
-                </View>
+                )}
 
-                {/* The dot (exactly at the center point) */}
-                <View style={styles.pickupDot}>
-                    <View style={styles.pickupDotInner} />
-                </View>
+                {/* --- POINTER UI OVERLAY (Center of top half) --- */}
+                <View style={styles.pickupMarkerContainer} pointerEvents="none">
+                    {/* The pointer pin (above the center point) */}
+                    <View style={styles.pointerPin}>
+                        <View style={styles.pickupPill}>
+                            <Text style={styles.pickupPillText}>Pickup Point</Text>
+                        </View>
+                        <View style={styles.pickupStem} />
+                    </View>
 
-                {/* Address text below center point */}
-                <View style={styles.pickupTextContainer}>
-                    {pickupCoord ? (
-                        <Text style={styles.pickupTitle} numberOfLines={1}>{title}</Text>
-                    ) : (
-                        <Text style={styles.pickupTitle} numberOfLines={1}>Finding Location...</Text>
-                    )}
-                    <Text style={styles.pickupSubtitle} numberOfLines={1}>{subtitle}</Text>
+                    {/* The dot (exactly at the center point) */}
+                    <View style={styles.pickupDot}>
+                        <View style={styles.pickupDotInner} />
+                    </View>
                 </View>
             </View>
 
-            {/* ============= ADDRESS CARD + GPS BUTTON ============= */}
+            {/* ============= ADDRESS CARD + GPS BUTTON (ABOVE BOTTOM SHEET) ============= */}
             <View style={styles.currentAddressCard}>
                 <View style={styles.addressLeft}>
                     <View style={styles.greenRing}>
                         <View style={styles.greenDot} />
                     </View>
                     <Text style={styles.addressText} numberOfLines={1}>
-                        {pickupCoord ? (pickupAddress?.name || title) : 'Locating...'}
+                        {isGeocoding ? 'Locating...' : (pickupCoord ? (pickupAddress?.name || title) : 'Unknown Location')}
                     </Text>
                 </View>
                 <TouchableOpacity activeOpacity={0.7} style={styles.gpsButton} onPress={handleCurrentLocationTap}>
@@ -290,6 +318,12 @@ export default function HomeMap({ onPickupLocationChange }: HomeMapProps) {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
+        backgroundColor: colors.white,
+    },
+    mapWrapper: {
+        width: '100%',
+        height: '62%', // Leaves bottom 38% for sheet, overlapping safely under the 40-45% snap bounds
+        position: 'relative',
     },
     map: {
         width: '100%',
@@ -305,13 +339,13 @@ const styles = StyleSheet.create({
     },
     pointerPin: {
         position: 'absolute',
-        bottom: 6, // Aligns bottom of the stem with the top of the dot
+        bottom: 6,
         alignItems: 'center',
     },
     pickupPill: {
         backgroundColor: colors.green,
-        paddingHorizontal: 12,
-        paddingVertical: 6,
+        paddingHorizontal: 10,
+        paddingVertical: 5,
         borderRadius: 20,
         elevation: 4,
         shadowColor: '#000',
@@ -322,11 +356,12 @@ const styles = StyleSheet.create({
     pickupPillText: {
         color: colors.white,
         fontWeight: '700',
-        fontSize: 13,
+        fontSize: 11,
+        letterSpacing: 0.3,
     },
     pickupStem: {
-        width: 1.5,
-        height: 12,
+        width: 2,
+        height: 10,
         backgroundColor: colors.green,
     },
     pickupDot: {
@@ -346,47 +381,23 @@ const styles = StyleSheet.create({
         borderRadius: 2,
         backgroundColor: colors.green,
     },
-    pickupTextContainer: {
-        alignItems: 'center',
-        marginTop: 6,
-    },
-    pickupTitle: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: colors.ink,
-        textShadowColor: 'rgba(255,255,255,1)',
-        textShadowOffset: { width: 0, height: 1 },
-        textShadowRadius: 3,
-        textAlign: 'center',
-        width: 150,
-    },
-    pickupSubtitle: {
-        fontSize: 12,
-        fontWeight: '600',
-        color: colors.inkSoft,
-        textShadowColor: 'rgba(255,255,255,1)',
-        textShadowOffset: { width: 0, height: 1 },
-        textShadowRadius: 2,
-        textAlign: 'center',
-        width: 150,
-    },
     currentAddressCard: {
         position: 'absolute',
-        bottom: '53%',
-        left: 20,
-        right: 20,
+        bottom: '45%', // Rests safely 2% above the 43% bottom sheet snap point
+        left: 16,
+        right: 16,
         backgroundColor: colors.white,
-        borderRadius: 24,
-        paddingHorizontal: 16,
-        paddingVertical: 12,
+        borderRadius: 28,
+        paddingHorizontal: 14,
+        paddingVertical: 10,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
         elevation: 4,
-        shadowColor: colors.ink,
+        shadowColor: "rgba(0,0,0,0.1)",
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
-        shadowRadius: 6,
+        shadowOpacity: 1,
+        shadowRadius: 8,
     },
     addressLeft: {
         flexDirection: 'row',
@@ -394,9 +405,9 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     greenRing: {
-        width: 12,
-        height: 12,
-        borderRadius: 6,
+        width: 14,
+        height: 14,
+        borderRadius: 7,
         borderWidth: 2,
         borderColor: colors.green,
         justifyContent: 'center',
@@ -410,13 +421,15 @@ const styles = StyleSheet.create({
         backgroundColor: colors.green,
     },
     addressText: {
-        fontSize: 13,
+        fontSize: 14,
         fontWeight: '600',
         color: colors.ink,
         flex: 1,
         marginRight: 8,
     },
     gpsButton: {
-        padding: 4,
+        padding: 6,
+        backgroundColor: '#F8FAFC',
+        borderRadius: 20,
     },
 });
