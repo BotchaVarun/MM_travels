@@ -1,7 +1,7 @@
 import { colors } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useRef, useState } from 'react';
-import { Dimensions, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Dimensions, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import MapView, { Region, UrlTile } from 'react-native-maps';
 import { useUserLocation } from '../../hooks/useUserLocation';
 import { formatAddress, reverseGeocode } from '../../services/location/geocodingService';
@@ -21,8 +21,82 @@ interface HomeMapProps {
     onPickupLocationChange: (coordinate: Coordinate, address: Address | null) => void;
 }
 
+// Leaflet HTML source document for web rendering
+const leafletHtml = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    html, body, #map {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      background-color: #f3f4f6;
+    }
+    .leaflet-control-attribution {
+      display: none !important;
+    }
+    .leaflet-bar {
+      border: none !important;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1) !important;
+      border-radius: 8px !important;
+      overflow: hidden;
+    }
+    .leaflet-bar a {
+      background-color: #ffffff !important;
+      color: #1e293b !important;
+      border: none !important;
+      border-bottom: 1px solid #f1f5f9 !important;
+      width: 32px !important;
+      height: 32px !important;
+      line-height: 32px !important;
+      font-size: 16px !important;
+      transition: background-color 0.2s;
+    }
+    .leaflet-bar a:hover {
+      background-color: #f8fafc !important;
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    var map = L.map('map', {
+      zoomControl: true,
+      attributionControl: false
+    }).setView([17.6868, 83.2185], 15);
+
+    L.tileLayer('https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png', {
+      maxZoom: 19
+    }).addTo(map);
+
+    map.on('moveend', function() {
+      var center = map.getCenter();
+      window.parent.postMessage({
+        type: 'MAP_MOVE_END',
+        latitude: center.lat,
+        longitude: center.lng
+      }, '*');
+    });
+
+    window.addEventListener('message', function(event) {
+      if (!event.data) return;
+      if (event.data.type === 'SET_CENTER') {
+        map.setView([event.data.latitude, event.data.longitude], event.data.zoom || map.getZoom());
+      }
+    });
+  </script>
+</body>
+</html>
+`;
+
 export default function HomeMap({ onPickupLocationChange }: HomeMapProps) {
     const mapRef = useRef<MapView>(null);
+    const iframeRef = useRef<any>(null);
     const { currentUserLocation } = useUserLocation();
 
     const [mapReady, setMapReady] = useState(false);
@@ -32,19 +106,61 @@ export default function HomeMap({ onPickupLocationChange }: HomeMapProps) {
 
     const geocodeRequestId = useRef(0);
 
-    // ---- Initial centering when real GPS arrives ----
+    // Set mapReady to true immediately on mount for web platform
     useEffect(() => {
-        if (currentUserLocation && mapReady && !initialRegionSet) {
-            mapRef.current?.animateToRegion({
-                latitude: currentUserLocation.latitude,
-                longitude: currentUserLocation.longitude,
-                latitudeDelta: 0.005,
-                longitudeDelta: 0.005,
-            }, 1000);
-            setInitialRegionSet(true);
-            handleSettledCoord(currentUserLocation);
+        if (Platform.OS === 'web') {
+            setMapReady(true);
+        }
+    }, []);
+
+    // ---- Web postMessage listener ----
+    useEffect(() => {
+        if (Platform.OS !== 'web') return;
+
+        const handleWebMessage = (event: MessageEvent) => {
+            if (event.data && event.data.type === 'MAP_MOVE_END') {
+                const { latitude, longitude } = event.data;
+                handleSettledCoord({ latitude, longitude });
+            }
+        };
+
+        window.addEventListener('message', handleWebMessage);
+        return () => {
+            window.removeEventListener('message', handleWebMessage);
+        };
+    }, []);
+
+    // ---- Centering when real GPS arrives ----
+    useEffect(() => {
+        if (currentUserLocation && mapReady) {
+            if (!initialRegionSet) {
+                if (Platform.OS === 'web') {
+                    iframeRef.current?.contentWindow?.postMessage({
+                        type: 'SET_CENTER',
+                        latitude: currentUserLocation.latitude,
+                        longitude: currentUserLocation.longitude,
+                        zoom: 15
+                    }, '*');
+                } else {
+                    mapRef.current?.animateToRegion({
+                        latitude: currentUserLocation.latitude,
+                        longitude: currentUserLocation.longitude,
+                        latitudeDelta: 0.005,
+                        longitudeDelta: 0.005,
+                    }, 1000);
+                }
+                setInitialRegionSet(true);
+                handleSettledCoord(currentUserLocation);
+            }
         }
     }, [currentUserLocation, mapReady, initialRegionSet]);
+
+    // ---- Fallback initialization when map is ready and GPS is slow/unavailable ----
+    useEffect(() => {
+        if (mapReady && !initialRegionSet && !currentUserLocation && !pickupCoord) {
+            handleSettledCoord(DEFAULT_REGION);
+        }
+    }, [mapReady, initialRegionSet, currentUserLocation, pickupCoord]);
 
     // ---- Reverse-geocode the settled coordinate ----
     const handleSettledCoord = async (coord: Coordinate) => {
@@ -70,13 +186,23 @@ export default function HomeMap({ onPickupLocationChange }: HomeMapProps) {
     // ---- Current-location button ----
     const handleCurrentLocationTap = () => {
         if (!currentUserLocation) return;
-        mapRef.current?.animateToRegion({
-            latitude: currentUserLocation.latitude,
-            longitude: currentUserLocation.longitude,
-            latitudeDelta: 0.005,
-            longitudeDelta: 0.005,
-        }, 1000);
-        handleSettledCoord(currentUserLocation);
+        if (Platform.OS === 'web') {
+            iframeRef.current?.contentWindow?.postMessage({
+                type: 'SET_CENTER',
+                latitude: currentUserLocation.latitude,
+                longitude: currentUserLocation.longitude,
+                zoom: 15
+            }, '*');
+            handleSettledCoord(currentUserLocation);
+        } else {
+            mapRef.current?.animateToRegion({
+                latitude: currentUserLocation.latitude,
+                longitude: currentUserLocation.longitude,
+                latitudeDelta: 0.005,
+                longitudeDelta: 0.005,
+            }, 1000);
+            handleSettledCoord(currentUserLocation);
+        }
     };
 
     const { title, subtitle } = formatAddress(pickupAddress);
@@ -85,40 +211,62 @@ export default function HomeMap({ onPickupLocationChange }: HomeMapProps) {
         <View style={styles.container}>
 
             {/* ===================== MAP ===================== */}
-            <MapView
-                ref={mapRef}
-                style={styles.map}
-                initialRegion={DEFAULT_REGION}
-                showsUserLocation={true}
-                showsMyLocationButton={false}
-                showsCompass={false}
-                onMapReady={() => setMapReady(true)}
-                onRegionChangeComplete={handleRegionChangeComplete}
-                mapType="none" // Disables Google's base tiles to avoid API Key restriction
-            >
-                <UrlTile
-                    urlTemplate="https://a.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                    maximumZ={19}
-                    flipY={false}
+            {Platform.OS === 'web' ? (
+                <iframe
+                    ref={iframeRef}
+                    srcDoc={leafletHtml}
+                    style={{
+                        width: '100%',
+                        height: '100%',
+                        border: 'none',
+                    }}
                 />
-            </MapView>
+            ) : (
+                <MapView
+                    ref={mapRef}
+                    style={styles.map}
+                    initialRegion={DEFAULT_REGION}
+                    showsUserLocation={true}
+                    showsMyLocationButton={false}
+                    showsCompass={false}
+                    onMapReady={() => setMapReady(true)}
+                    onRegionChangeComplete={handleRegionChangeComplete}
+                    mapType={Platform.OS === 'android' ? 'none' : 'standard'}
+                >
+                    <UrlTile
+                        urlTemplate="https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png"
+                        maximumZ={19}
+                        flipY={false}
+                        shouldReplaceMapContent={true}
+                        zIndex={1}
+                    />
+                </MapView>
+            )}
 
             {/* ============= FIXED CENTER PICKUP CURSOR ============= */}
             <View style={styles.pickupMarkerContainer} pointerEvents="none">
-                <View style={styles.pickupPill}>
-                    <Text style={styles.pickupPillText}>Pickup Point</Text>
+                {/* The pointer pin (above the center point) */}
+                <View style={styles.pointerPin}>
+                    <View style={styles.pickupPill}>
+                        <Text style={styles.pickupPillText}>Pickup Point</Text>
+                    </View>
+                    <View style={styles.pickupStem} />
                 </View>
-                <View style={styles.pickupStem} />
+
+                {/* The dot (exactly at the center point) */}
                 <View style={styles.pickupDot}>
                     <View style={styles.pickupDotInner} />
                 </View>
 
-                {pickupCoord ? (
-                    <Text style={styles.pickupTitle} numberOfLines={1}>{title}</Text>
-                ) : (
-                    <Text style={styles.pickupTitle} numberOfLines={1}>Finding Location...</Text>
-                )}
-                <Text style={styles.pickupSubtitle} numberOfLines={1}>{subtitle}</Text>
+                {/* Address text below center point */}
+                <View style={styles.pickupTextContainer}>
+                    {pickupCoord ? (
+                        <Text style={styles.pickupTitle} numberOfLines={1}>{title}</Text>
+                    ) : (
+                        <Text style={styles.pickupTitle} numberOfLines={1}>Finding Location...</Text>
+                    )}
+                    <Text style={styles.pickupSubtitle} numberOfLines={1}>{subtitle}</Text>
+                </View>
             </View>
 
             {/* ============= ADDRESS CARD + GPS BUTTON ============= */}
@@ -149,9 +297,15 @@ const styles = StyleSheet.create({
     },
     pickupMarkerContainer: {
         position: 'absolute',
-        top: '25%',
-        left: '50%',
-        transform: [{ translateX: -60 }],
+        top: '50%',
+        left: 0,
+        right: 0,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    pointerPin: {
+        position: 'absolute',
+        bottom: 6, // Aligns bottom of the stem with the top of the dot
         alignItems: 'center',
     },
     pickupPill: {
@@ -184,13 +338,17 @@ const styles = StyleSheet.create({
         borderColor: colors.green,
         justifyContent: 'center',
         alignItems: 'center',
-        marginBottom: 6,
+        marginTop: -6, // Centers the dot's midpoint exactly at top: '50%'
     },
     pickupDotInner: {
         width: 4,
         height: 4,
         borderRadius: 2,
         backgroundColor: colors.green,
+    },
+    pickupTextContainer: {
+        alignItems: 'center',
+        marginTop: 6,
     },
     pickupTitle: {
         fontSize: 16,
