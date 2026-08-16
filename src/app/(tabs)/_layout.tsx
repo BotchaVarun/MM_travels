@@ -13,90 +13,93 @@ export default function TabLayout() {
                 headerShown: false,
                 tabBarShowLabel: true,
                 tabBarActiveTintColor: colors.ink,
-                tabBarInactiveTintColor: colors.inkFaint,
+                tabBarInactiveTintColor: colors.inkSoft,
                 tabBarStyle: [
                     styles.tabBar,
-                    { height: Platform.OS === 'ios' ? 70 : 64, paddingBottom: Platform.OS === 'ios' ? 10 : 8 },
+                    {
+                        height: Platform.OS === 'ios' ? 84 : 68,
+                        paddingBottom: Platform.OS === 'ios' ? 24 : 8
+                    }
                 ],
                 tabBarLabelStyle: styles.tabBarLabel,
+                tabBarHideOnKeyboard: true,
             }}
         >
             <Tabs.Screen
                 name="index"
                 options={{
-                    title: 'Home',
-                    tabBarIcon: ({ color, focused }: { color: any; focused: boolean }) => (
-                        <View style={[styles.iconContainer, focused && styles.iconContainerActive]}>
+                    title: 'Ride',
+                    tabBarIcon: ({ color, focused }) => (
+                        <View style={[styles.iconContainer]}>
                             <Ionicons name={focused ? 'home' : 'home-outline'} size={24} color={color} />
                         </View>
                     ),
                 }}
             />
+            {/* Using services.tsx for All Services */}
             <Tabs.Screen
                 name="services"
                 options={{
-                    title: 'Services',
-                    tabBarIcon: ({ color, focused }: { color: any; focused: boolean }) => (
-                        <View style={[styles.iconContainer, focused && styles.iconContainerActive]}>
+                    title: 'All Services',
+                    tabBarIcon: ({ color, focused }) => (
+                        <View style={[styles.iconContainer]}>
                             <Ionicons name={focused ? 'grid' : 'grid-outline'} size={24} color={color} />
                         </View>
                     ),
                 }}
             />
+            {/* Using explore.tsx for Travel */}
             <Tabs.Screen
-                name="activity"
+                name="explore"
                 options={{
-                    title: 'Activity',
-                    tabBarIcon: ({ color, focused }: { color: any; focused: boolean }) => (
-                        <View style={[styles.iconContainer, focused && styles.iconContainerActive]}>
-                            <Ionicons name={focused ? 'receipt' : 'receipt-outline'} size={24} color={color} />
+                    title: 'Travel',
+                    tabBarIcon: ({ color, focused }) => (
+                        <View style={[styles.iconContainer]}>
+                            <Ionicons name={focused ? 'map' : 'map-outline'} size={24} color={color} />
                         </View>
                     ),
                 }}
             />
             <Tabs.Screen
-                name="account"
+                name="profile"
                 options={{
-                    title: 'Account',
-                    tabBarIcon: ({ color, focused }: { color: any; focused: boolean }) => (
-                        <View style={[styles.iconContainer, focused && styles.iconContainerActive]}>
+                    title: 'Profile',
+                    tabBarIcon: ({ color, focused }) => (
+                        <View style={[styles.iconContainer]}>
                             <Ionicons name={focused ? 'person' : 'person-outline'} size={24} color={color} />
                         </View>
                     ),
                 }}
             />
+
+            {/* Hide all other files in (tabs) directory from rendering in the bottom nav */}
+            <Tabs.Screen name="activity" options={{ href: null }} />
+            <Tabs.Screen name="account" options={{ href: null }} />
+            <Tabs.Screen name="help" options={{ href: null }} />
+            <Tabs.Screen name="trips" options={{ href: null }} />
         </Tabs>
     );
 }
 
 const styles = StyleSheet.create({
     tabBar: {
-        position: 'absolute',
-        bottom: 20,
-        left: 20,
-        right: 20,
         backgroundColor: colors.white,
-        borderRadius: 30, // heavy pill radius
-        // Drop shadow
-        shadowColor: colors.ink,
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.1,
-        shadowRadius: 20,
-        elevation: 8,
-        borderTopWidth: 0,
+        borderTopWidth: 1,
+        borderTopColor: '#F3F4F6', // Subtle top shadow/border per spec
         paddingTop: 8,
+        elevation: 8, // slight shadow above
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: -2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
     },
     tabBarLabel: {
-        fontSize: 10,
-        fontWeight: '700',
+        fontSize: 11,
+        fontWeight: '600',
         marginTop: 2,
     },
     iconContainer: {
-        paddingHorizontal: 16,
-        paddingVertical: 4,
-        borderRadius: 20,
+        justifyContent: 'center',
+        alignItems: 'center',
     },
-    iconContainerActive: {
-        backgroundColor: colors.surface, // light grey highlight behind active icon matching image
-    }
 });

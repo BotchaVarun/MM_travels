@@ -1,93 +1,195 @@
+import HomeMap from '../../components/map/HomeMap';
+import { Coordinate, Address } from '../../types/location';
 import { colors } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
-import { Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import BottomSheet, { BottomSheetScrollView } from '@gorhom/bottom-sheet';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import { useMemo, useRef, useState } from 'react';
+import { Dimensions, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
-const MOCK_REGION = {
-    latitude: 17.6868,
-    longitude: 83.2185,
-    latitudeDelta: 0.0922,
-    longitudeDelta: 0.0421,
-};
+const { width } = Dimensions.get('window');
 
 export default function HomeScreen() {
+    const router = useRouter();
+    const bottomSheetRef = useRef<BottomSheet>(null);
+
+    // Track selections for future booking flows
+    const [selectedCoord, setSelectedCoord] = useState<Coordinate | null>(null);
+    const [selectedAddress, setSelectedAddress] = useState<Address | null>(null);
+
+    // Initial snap point leaves map visible. Expanded fills the screen to the top notch.
+    const snapPoints = useMemo(() => ['48%', '94%'], []);
+
+    const handlePickupChange = (coord: Coordinate, location: Address | null) => {
+        setSelectedCoord(coord);
+        setSelectedAddress(location);
+    };
+
     return (
         <View style={styles.container}>
-            {/* 
-                Mocked Background Map Layer 
-                (MapView requires a valid Google Maps API Key in app.json on physical Native Android builds. 
-                Leaving the real MapView without a key will instantly crash the app natively).
-            */}
-            <View style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, backgroundColor: '#E4E0D6', justifyContent: 'center', alignItems: 'center' }}>
-                <Ionicons name="map" size={100} color="#D1CDA8" style={{ opacity: 0.5 }} />
-                <Text style={{ marginTop: 12, color: colors.inkSoft, fontWeight: '600' }}>[ Google Maps Placeholder ]</Text>
+            <StatusBar style="dark" />
+
+            {/* --- MAP LAYER --- */}
+            {/* Using zIndex: 0 and strict absolute filling so it lives natively behind the BottomSheet */}
+            <View style={[StyleSheet.absoluteFill, { zIndex: 0, elevation: 0 }]}>
+                <HomeMap onPickupLocationChange={handlePickupChange} />
             </View>
+            {/* --- END MAP LAYER --- */}
 
-            {/* Top Floating Target Location Search */}
-            <SafeAreaView pointerEvents="box-none" style={styles.topFloatingZone}>
-                <View style={styles.topSearchCard}>
-                    <View style={styles.greenRing}>
-                        <View style={styles.greenDot} />
-                    </View>
-                    <Text style={styles.topSearchText}>Your Current Location</Text>
-                    <TouchableOpacity activeOpacity={0.7} style={styles.gpsButton}>
-                        <Ionicons name="locate" size={20} color={colors.ink} />
-                    </TouchableOpacity>
-                </View>
-            </SafeAreaView>
 
-            {/* Interactive Bottom Sheet overlay */}
-            <View style={styles.bottomSheet} pointerEvents="box-none">
-                <View style={styles.sheetContainer}>
-                    <View style={styles.dragHandle} />
 
-                    {/* Search Input Box */}
-                    <TouchableOpacity activeOpacity={0.8} style={styles.searchInputCard}>
-                        <Ionicons name="search" size={20} color={colors.ink} style={styles.searchIcon} />
+            {/* --- BOTTOM SHEET LAYER --- */}
+            <BottomSheet
+                ref={bottomSheetRef}
+                index={0}
+                snapPoints={snapPoints}
+                handleIndicatorStyle={styles.sheetHandle}
+                backgroundStyle={styles.sheetBackground}
+                style={{ zIndex: 100, elevation: 20 }} // Crucial: forces sheet above everything in the Map Layer!
+            >
+                <BottomSheetScrollView
+                    contentContainerStyle={styles.sheetScrollContent}
+                    showsVerticalScrollIndicator={false}
+                >
+
+                    {/* Destination Search Bar */}
+                    <TouchableOpacity activeOpacity={0.9} style={styles.searchBar}>
+                        <Ionicons name="location-outline" size={22} color={colors.ink} style={{ marginRight: 12 }} />
                         <Text style={styles.searchPlaceholderText}>Where do you want to go?</Text>
                     </TouchableOpacity>
 
-                    {/* Current Address Sub-row */}
-                    <View style={styles.addressRow}>
-                        <View style={styles.greenDotSmall} />
-                        <Text style={styles.addressText} numberOfLines={1}>
-                            M3VW+289, Mantripalem Colony, Andhra Prad...
-                        </Text>
+                    {/* Explore Section */}
+                    <View style={styles.sectionHeader}>
+                        <Text style={styles.sectionTitle}>Explore</Text>
+                        <TouchableOpacity activeOpacity={0.7} style={styles.viewAllBtn}>
+                            <Text style={styles.viewAllText}>View All</Text>
+                            <Ionicons name="chevron-forward" size={14} color={colors.inkSoft} />
+                        </TouchableOpacity>
                     </View>
 
-                    {/* Services Grid */}
-                    <Text style={styles.sectionTitle}>Our Services</Text>
-
-                    <View style={styles.gridContainer}>
-                        {/* Service 1 */}
-                        <TouchableOpacity activeOpacity={0.7} style={styles.serviceBox}>
-                            <Text style={styles.serviceEmoji}>🛺</Text>
-                            <Text style={styles.serviceTitle}>Quick Rides</Text>
-                        </TouchableOpacity>
-
-                        {/* Service 2 */}
-                        <TouchableOpacity activeOpacity={0.7} style={styles.serviceBox}>
-                            <Text style={styles.serviceEmoji}>🚕</Text>
-                            <Text style={styles.serviceTitle}>Cabs</Text>
-                        </TouchableOpacity>
-
-                        {/* Service 3 */}
-                        <TouchableOpacity activeOpacity={0.7} style={styles.serviceBox}>
-                            <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center' }}>
-                                <Text style={styles.serviceEmoji}>🚕</Text>
-                                <Text style={{ fontSize: 20 }}>🧳</Text>
+                    {/* Service Cards Carousel */}
+                    <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={styles.svcRow}
+                    >
+                        {/* Shared Auto */}
+                        <TouchableOpacity activeOpacity={0.7} style={styles.svcCard}>
+                            <View style={[styles.svcIconBlock, { backgroundColor: '#F0FDF4' }]}>
+                                {/* Illustration approximation */}
+                                <LinearGradient colors={['#4ADE80', '#22C55E']} style={styles.vehicleIllustBackground} />
+                                <Ionicons name="car-sport" size={28} color="#064E3B" style={{ marginTop: 6 }} />
                             </View>
-                            <Text style={styles.serviceTitle}>Airport Cabs</Text>
+                            <Text style={styles.svcName} numberOfLines={2}>Shared{'\n'}Auto</Text>
                         </TouchableOpacity>
 
-                        {/* Service 4 */}
-                        <TouchableOpacity activeOpacity={0.7} style={styles.serviceBox}>
-                            <Text style={styles.serviceEmoji}>📦</Text>
-                            <Text style={styles.serviceTitle}>More Services</Text>
+                        {/* Parcel on Bike */}
+                        <TouchableOpacity activeOpacity={0.7} style={styles.svcCard}>
+                            <View style={[styles.svcIconBlock, { backgroundColor: '#FFFBEB' }]}>
+                                <LinearGradient colors={['#FDE047', '#EAB308']} style={styles.vehicleIllustBackground} />
+                                <Ionicons name="bicycle" size={28} color="#713F12" style={{ marginTop: 6 }} />
+                                <Ionicons name="cube" size={14} color="#713F12" style={{ position: 'absolute', top: 10, right: 10 }} />
+                            </View>
+                            <Text style={styles.svcName} numberOfLines={2}>Parcel on{'\n'}Bike</Text>
                         </TouchableOpacity>
-                    </View>
-                </View>
-            </View>
+
+                        {/* Auto */}
+                        <TouchableOpacity activeOpacity={0.7} style={styles.svcCard}>
+                            <View style={[styles.svcIconBlock, { backgroundColor: '#F0FDF4' }]}>
+                                <LinearGradient colors={['#4ADE80', '#22C55E']} style={styles.vehicleIllustBackground} />
+                                <Ionicons name="car-sport" size={28} color="#064E3B" style={{ marginTop: 6 }} />
+                            </View>
+                            <Text style={styles.svcName} numberOfLines={2}>Auto</Text>
+                        </TouchableOpacity>
+
+                        {/* Cab Economy */}
+                        <TouchableOpacity activeOpacity={0.7} style={styles.svcCard}>
+                            <View style={[styles.svcIconBlock, { backgroundColor: '#F8FAFC' }]}>
+                                <LinearGradient colors={['#E2E8F0', '#CBD5E1']} style={styles.vehicleIllustBackground} />
+                                <Ionicons name="car" size={28} color="#0F172A" style={{ marginTop: 6 }} />
+                            </View>
+                            <Text style={styles.svcName} numberOfLines={2}>Cab{'\n'}Economy</Text>
+                        </TouchableOpacity>
+                    </ScrollView>
+
+                    {/* Promotional Banner */}
+                    <TouchableOpacity activeOpacity={0.9} style={styles.primaryPromoBanner}>
+                        <LinearGradient colors={['#0F172A', '#1E293B']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} />
+                        <View style={{ flex: 1, justifyContent: 'center' }}>
+                            <Text style={styles.promoHeadline}>FIRST AUTO RIDE FREE</Text>
+                            <Text style={styles.promoSub}>offer has been detected.</Text>
+                            <View style={styles.promoCtaBubble}>
+                                <Text style={styles.promoCtaText}>Tap here to apply</Text>
+                            </View>
+                        </View>
+                        <Ionicons name="globe-outline" size={80} color="rgba(255,255,255,0.03)" style={{ position: 'absolute', right: -20, bottom: -20 }} />
+                    </TouchableOpacity>
+
+                    {/* Go Places Section */}
+                    <Text style={[styles.sectionTitle, { marginTop: 24, marginBottom: 16 }]}>Go Places with MM Travels</Text>
+
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.placesRow}>
+
+                        {/* International Airport */}
+                        <TouchableOpacity activeOpacity={0.9} style={styles.placeCard}>
+                            <View style={styles.placeImgZone}>
+                                <LinearGradient colors={['#FCD34D', '#F59E0B']} style={StyleSheet.absoluteFill} />
+                                <Ionicons name="airplane" size={44} color="#FFF" style={styles.placeIconMock} />
+                            </View>
+                            <View style={styles.placeTextZone}>
+                                <Text style={styles.placeTitle} numberOfLines={2}>Visakhapatnam{'\n'}International...</Text>
+                            </View>
+                        </TouchableOpacity>
+
+                        {/* Junction */}
+                        <TouchableOpacity activeOpacity={0.9} style={styles.placeCard}>
+                            <View style={styles.placeImgZone}>
+                                <LinearGradient colors={['#FCA5A5', '#EF4444']} style={StyleSheet.absoluteFill} />
+                                <Ionicons name="train" size={44} color="#FFF" style={styles.placeIconMock} />
+                            </View>
+                            <View style={styles.placeTextZone}>
+                                <Text style={styles.placeTitle} numberOfLines={2}>Visakhapatnam{'\n'}Junction</Text>
+                            </View>
+                        </TouchableOpacity>
+
+                        {/* Bus Stand */}
+                        <TouchableOpacity activeOpacity={0.9} style={styles.placeCard}>
+                            <View style={styles.placeImgZone}>
+                                <LinearGradient colors={['#93C5FD', '#3B82F6']} style={StyleSheet.absoluteFill} />
+                                <Ionicons name="bus" size={44} color="#FFF" style={styles.placeIconMock} />
+                            </View>
+                            <View style={styles.placeTextZone}>
+                                <Text style={styles.placeTitle} numberOfLines={2}>Visakhapatnam{'\n'}Bus Stand</Text>
+                            </View>
+                        </TouchableOpacity>
+                    </ScrollView>
+
+                    {/* Secondary Large Campaign Card */}
+                    <TouchableOpacity activeOpacity={0.9} style={styles.campaignCard}>
+                        <View style={{ flex: 1 }}>
+                            <Text style={styles.campaignHeader}>Three wheels.{'\n'}Free wheels.</Text>
+                            <Text style={styles.campaignSubText}>
+                                Use coupon: <Text style={{ fontWeight: '800' }}>FREERIDE</Text>{'\n'}on first Auto ride.
+                            </Text>
+                            <View style={styles.campaignButton}>
+                                <Text style={styles.campaignButtonText}>Try Our Auto</Text>
+                            </View>
+                        </View>
+                        <View style={styles.campaignIllustration}>
+                            <Ionicons name="car-sport" size={70} color="#166534" />
+                        </View>
+                    </TouchableOpacity>
+
+                    {/* Massive padding buffer to prevent bottom navigation overlap */}
+                    {/* Bottom nav height + safety margin */}
+                    <View style={{ height: Platform.OS === 'ios' ? 120 : 100 }} />
+
+                </BottomSheetScrollView>
+            </BottomSheet>
+            {/* --- END BOTTOM SHEET LAYER --- */}
+
         </View>
     );
 }
@@ -95,157 +197,213 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: colors.surface,
+        backgroundColor: colors.white,
     },
-    topFloatingZone: {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        paddingHorizontal: 20,
+    sheetBackground: {
+        backgroundColor: colors.white,
+        borderTopLeftRadius: 26,
+        borderTopRightRadius: 26,
+        elevation: 20, // Forces sheet ABOVE the map elements!
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: -4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 16,
+    },
+    sheetHandle: {
+        width: 34,
+        height: 4,
+        backgroundColor: '#E5E7EB',
+        borderRadius: 2,
+        marginTop: 10,
+    },
+    sheetScrollContent: {
         paddingTop: 10,
-        zIndex: 10,
     },
-    topSearchCard: {
+    searchBar: {
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: colors.white,
-        borderRadius: 30, // tall pill
-        height: 52,
+        borderWidth: 1,
+        borderColor: '#F3F4F6',
+        borderRadius: 28,
+        marginHorizontal: 16,
         paddingHorizontal: 16,
-        shadowColor: colors.ink,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 10,
-        elevation: 5,
+        height: 52, // Exact spec height
+        marginBottom: 18,
+        elevation: 1,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.04,
+        shadowRadius: 3,
     },
-    greenRing: {
-        width: 18,
-        height: 18,
-        borderRadius: 9,
-        borderWidth: 2,
-        borderColor: colors.greenInk,
+    searchPlaceholderText: {
+        fontSize: 15, // spec
+        fontWeight: '600', // spec
+        color: colors.ink,
+    },
+    sectionHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginHorizontal: 16,
+        marginBottom: 16,
+    },
+    sectionTitle: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: colors.ink,
+    },
+    viewAllBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    viewAllText: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: colors.inkSoft,
+        marginRight: 2,
+    },
+    svcRow: {
+        paddingLeft: 16, // Matching safe horizontal margin
+        paddingRight: 6,
+        gap: 12,
+        marginBottom: 20,
+    },
+    svcCard: {
+        width: 76,  // spec width (68-76dp)
+        alignItems: 'center',
+    },
+    svcIconBlock: {
+        width: 62,  // spec container (56-64dp)
+        height: 62,
+        borderRadius: 14,
         justifyContent: 'center',
         alignItems: 'center',
-        marginRight: 12,
+        marginBottom: 8,
+        position: 'relative',
+        overflow: 'hidden',
     },
-    greenDot: {
-        width: 8,
-        height: 8,
-        borderRadius: 4,
-        backgroundColor: colors.greenInk,
-    },
-    topSearchText: {
-        flex: 1,
-        fontSize: 14,
-        fontWeight: '700',
-        color: colors.inkSoft,
-    },
-    gpsButton: {
-        padding: 8,
-        marginRight: -8, // absorb padding for tighter native alignment
-    },
-    bottomSheet: {
+    vehicleIllustBackground: {
         position: 'absolute',
         bottom: 0,
         left: 0,
         right: 0,
-        justifyContent: 'flex-end',
-        // Push the sheet content upwards so it doesn't collide with the pill tab bar natively
-        paddingBottom: Platform.OS === 'ios' ? 110 : 100,
+        height: '40%',
+        opacity: 0.15,
     },
-    sheetContainer: {
-        backgroundColor: colors.white,
-        borderTopLeftRadius: 26,
-        borderTopRightRadius: 26,
-        paddingHorizontal: 20,
-        paddingTop: 12,
-        paddingBottom: 24,
-        // Soft shadow casting upward onto the map
-        shadowColor: colors.ink,
-        shadowOffset: { width: 0, height: -4 },
-        shadowOpacity: 0.05,
-        shadowRadius: 12,
-        elevation: 10,
+    svcName: {
+        fontSize: 12, // spec
+        fontWeight: '600',
+        color: colors.ink,
+        textAlign: 'center',
+        lineHeight: 14,
     },
-    dragHandle: {
-        width: 40,
-        height: 4,
-        borderRadius: 2,
-        backgroundColor: colors.ink,
-        alignSelf: 'center',
-        marginBottom: 20,
-    },
-    searchInputCard: {
+    primaryPromoBanner: {
+        width: width - 32,
+        marginHorizontal: 16,
+        height: 76, // Compact height per spec
+        borderRadius: 12,
+        padding: 14,
         flexDirection: 'row',
-        alignItems: 'center',
+        overflow: 'hidden',
+    },
+    promoHeadline: {
+        fontSize: 14,
+        fontWeight: '900',
+        color: colors.gold,
+        letterSpacing: 0.2,
+    },
+    promoSub: {
+        fontSize: 11,
+        color: '#E2E8F0',
+        marginTop: 2,
+        marginBottom: 8,
+    },
+    promoCtaBubble: {
         backgroundColor: colors.white,
-        borderWidth: 1.5,
-        borderColor: colors.line,
-        borderRadius: 24,
-        height: 48,
-        paddingHorizontal: 16,
-        marginBottom: 12,
+        alignSelf: 'flex-start',
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 12,
     },
-    searchIcon: {
-        marginRight: 10,
-    },
-    searchPlaceholderText: {
-        fontSize: 16,
-        fontWeight: '500',
-        color: colors.inkSoft,
-    },
-    addressRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 8,
-        marginBottom: 24,
-    },
-    greenDotSmall: {
-        width: 8,
-        height: 8,
-        borderRadius: 4,
-        backgroundColor: colors.greenInk,
-        marginRight: 10,
-    },
-    addressText: {
-        fontSize: 12,
-        fontWeight: '500',
-        color: colors.inkSoft,
-        flex: 1,
-    },
-    sectionTitle: {
-        fontSize: 18,
+    promoCtaText: {
+        fontSize: 9,
         fontWeight: '800',
         color: colors.ink,
+    },
+    placesRow: {
+        paddingLeft: 16,
+        paddingRight: 6,
+        gap: 12,
+        marginBottom: 28,
+    },
+    placeCard: {
+        width: 118, // spec width
+        height: 148, // spec height
+        borderRadius: 12,
+        backgroundColor: '#F9FAFB',
+        borderWidth: 1,
+        borderColor: '#F3F4F6',
+        overflow: 'hidden',
+    },
+    placeImgZone: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    placeIconMock: {
+        opacity: 0.9,
+    },
+    placeTextZone: {
+        backgroundColor: colors.white,
+        paddingHorizontal: 10,
+        paddingVertical: 8,
+        height: 52, // 2 lines explicitly
+        justifyContent: 'center',
+    },
+    placeTitle: {
+        fontSize: 11,
+        fontWeight: '600',
+        color: colors.ink,
+        lineHeight: 14,
+    },
+    campaignCard: {
+        backgroundColor: '#FFF8F0',
+        borderWidth: 1,
+        borderColor: '#FEF0DA',
+        borderRadius: 16, // Spec radius
+        marginHorizontal: 16,
+        padding: 20,
+        flexDirection: 'row',
+    },
+    campaignHeader: {
+        fontSize: 18,
+        fontWeight: '900',
+        color: colors.ink,
+        lineHeight: 22,
+        marginBottom: 8,
+    },
+    campaignSubText: {
+        fontSize: 12,
+        color: colors.inkSoft,
+        lineHeight: 16,
         marginBottom: 16,
     },
-    gridContainer: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        justifyContent: 'space-between',
-        gap: 12,
-    },
-    serviceBox: {
-        width: '48%',
-        backgroundColor: colors.surface,
+    campaignButton: {
+        backgroundColor: '#FDE68A',
+        alignSelf: 'flex-start',
+        paddingHorizontal: 16,
+        paddingVertical: 8,
         borderRadius: 16,
-        padding: 16,
-        height: 100, // Fixed height for visual consistency
-        justifyContent: 'flex-end', // pushes title to bottom
     },
-    serviceEmoji: {
-        fontSize: 32,
-        position: 'absolute',
-        top: 10,
-        left: '50%',
-        transform: [{ translateX: -16 }],
-        textAlign: 'center',
+    campaignButtonText: {
+        fontSize: 11,
+        fontWeight: '800',
+        color: '#B45309',
     },
-    serviceTitle: {
-        fontSize: 13,
-        fontWeight: '700',
-        color: colors.ink,
-        textAlign: 'center',
-    },
+    campaignIllustration: {
+        justifyContent: 'center',
+        alignItems: 'flex-end',
+        flex: 0.5,
+    }
 });

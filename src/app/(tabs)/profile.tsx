@@ -1,0 +1,1 @@
+import { View, Text } from 'react-native'; export default function Stub() { return <View><Text>Stub</Text></View>; }
