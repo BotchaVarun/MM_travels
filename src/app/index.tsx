@@ -15,7 +15,7 @@ export default function SplashScreenComponent() {
 
     // Extend splash time to 2.5s total before routing
     const timer = setTimeout(() => {
-      router.replace('/onboarding');
+      router.replace('/(tabs)' as any); // DEV: skip to home for map testing (was: '/onboarding')
     }, 2500);
 
     return () => clearTimeout(timer);

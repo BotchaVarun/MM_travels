@@ -2,7 +2,7 @@ import { colors } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useRef, useState } from 'react';
 import { Dimensions, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import MapView, { Region } from 'react-native-maps';
+import MapView, { Region, UrlTile } from 'react-native-maps';
 import { useUserLocation } from '../../hooks/useUserLocation';
 import { formatAddress, reverseGeocode } from '../../services/location/geocodingService';
 import { Address, Coordinate } from '../../types/location';
@@ -94,7 +94,14 @@ export default function HomeMap({ onPickupLocationChange }: HomeMapProps) {
                 showsCompass={false}
                 onMapReady={() => setMapReady(true)}
                 onRegionChangeComplete={handleRegionChangeComplete}
-            />
+                mapType="none" // Disables Google's base tiles to avoid API Key restriction
+            >
+                <UrlTile
+                    urlTemplate="https://a.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    maximumZ={19}
+                    flipY={false}
+                />
+            </MapView>
 
             {/* ============= FIXED CENTER PICKUP CURSOR ============= */}
             <View style={styles.pickupMarkerContainer} pointerEvents="none">
