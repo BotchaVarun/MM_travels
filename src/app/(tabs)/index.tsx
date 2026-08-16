@@ -7,6 +7,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useMemo, useRef, useState } from 'react';
 import { Dimensions, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import HomeMap from '../../components/map/HomeMap';
+import { AllServicesModal } from '../../components/ui/AllServicesModal';
 import { Address, Coordinate } from '../../types/location';
 
 const { width } = Dimensions.get('window');
@@ -14,6 +15,7 @@ const { width } = Dimensions.get('window');
 export default function HomeScreen() {
     const router = useRouter();
     const bottomSheetRef = useRef<BottomSheet>(null);
+    const servicesModalRef = useRef<BottomSheet>(null);
 
     // Track selections for future booking flows
     const [selectedCoord, setSelectedCoord] = useState<Coordinate | null>(null);
@@ -62,7 +64,11 @@ export default function HomeScreen() {
                     {/* Explore Section */}
                     <View style={styles.sectionHeader}>
                         <Text style={styles.sectionTitle}>Explore</Text>
-                        <TouchableOpacity activeOpacity={0.7} style={styles.viewAllBtn}>
+                        <TouchableOpacity
+                            activeOpacity={0.7}
+                            style={styles.viewAllBtn}
+                            onPress={() => servicesModalRef.current?.expand()}
+                        >
                             <Text style={styles.viewAllText}>View All</Text>
                             <Ionicons name="chevron-forward" size={14} color={colors.inkSoft} />
                         </TouchableOpacity>
@@ -189,6 +195,9 @@ export default function HomeScreen() {
             </BottomSheet>
             {/* --- END BOTTOM SHEET LAYER --- */}
 
+            {/* --- MODALS --- */}
+            <AllServicesModal ref={servicesModalRef} />
+
         </View>
     );
 }
@@ -251,6 +260,7 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: '700',
         color: colors.ink,
+        paddingRight: 4, // Prevents Android font cutoff on bold layout bounds
     },
     viewAllBtn: {
         flexDirection: 'row',

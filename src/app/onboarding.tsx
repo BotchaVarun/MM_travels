@@ -1,7 +1,9 @@
 import { Button } from '@/components/ui/Button';
 import { colors, radius, spacing, typography } from '@/constants/theme';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import React, { useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import {
     FlatList,
     StyleSheet,
@@ -18,28 +20,46 @@ const SLIDES = [
         title: 'Discover',
         subtitle: 'Find the best routes and vehicle options for your journey.',
         illustrationType: 'map',
+        colors: ['#4ADE80', '#22C55E'],
+        icon: 'map',
     },
     {
         id: '2',
         title: 'Compare Verified Fleets',
         subtitle: 'Choose from a variety of trusted and verified vehicles.',
         illustrationType: 'car',
+        colors: ['#FDE047', '#EAB308'],
+        icon: 'car-sport',
     },
     {
         id: '3',
         title: 'Book With Confidence',
         subtitle: 'Secure payments, live tracking, and dedicated support.',
         illustrationType: 'shield',
+        colors: ['#93C5FD', '#3B82F6'],
+        icon: 'shield-checkmark',
     },
 ];
 
-// Placeholder for the 150x130 vector illustration SVG
-const IllustrationPlaceholder = ({ type }: { type: string }) => {
+// Replaced static shapes with beautiful gradient meshes and vector iconography
+const IllustrationPlaceholder = ({ slide }: { slide: typeof SLIDES[0] }) => {
     return (
         <View style={styles.illustrationWrapper}>
-            {type === 'map' && <View style={[styles.shape, { backgroundColor: colors.gold, borderRadius: 10 }]} />}
-            {type === 'car' && <View style={[styles.shape, { backgroundColor: '#F5C27A', borderRadius: 4 }]} />}
-            {type === 'shield' && <View style={[styles.shape, { backgroundColor: colors.goldDark, borderBottomLeftRadius: 30, borderBottomRightRadius: 30 }]} />}
+            <LinearGradient
+                colors={slide.colors as [string, string]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={[
+                    styles.shape,
+                    {
+                        borderRadius: slide.illustrationType === 'shield' ? 50 : 20,
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                    }
+                ]}
+            >
+                <Ionicons name={slide.icon as any} size={80} color="#FFFFFF" style={{ opacity: 0.9 }} />
+            </LinearGradient>
         </View>
     );
 };
@@ -71,7 +91,7 @@ export default function OnboardingScreen() {
     const renderItem = ({ item }: { item: typeof SLIDES[0] }) => {
         return (
             <View style={[styles.slide, { width }]}>
-                <IllustrationPlaceholder type={item.illustrationType} />
+                <IllustrationPlaceholder slide={item} />
             </View>
         );
     };
@@ -163,14 +183,20 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     illustrationWrapper: {
-        width: 150,
-        height: 130,
+        width: 180,
+        height: 180,
         justifyContent: 'center',
         alignItems: 'center',
+        marginBottom: 20,
     },
     shape: {
-        width: 80,
-        height: 80,
+        width: 150,
+        height: 150,
+        elevation: 10,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 10,
     },
     paginationContainer: {
         flexDirection: 'row',
