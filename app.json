@@ -1,6 +1,4 @@
-import 'dotenv/config';
-
-export default {
+{
   "expo": {
     "name": "MM_travels",
     "slug": "MM_travels",
@@ -18,12 +16,7 @@ export default {
         "foregroundImage": "./assets/images/icon.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.bhanuusr.MM_travels",
-      "config": {
-        "googleMaps": {
-          "apiKey": process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || ''
-        }
-      }
+      "package": "com.bhanuusr.MM_travels"
     },
     "web": {
       "output": "static",
@@ -45,12 +38,6 @@ export default {
         }
       ],
       [
-        "react-native-maps",
-        {
-          "androidGoogleMapsApiKey": process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || ''
-        }
-      ],
-      [
         "expo-location",
         {
           "locationAlwaysAndWhenInUsePermission": "Allow $(PRODUCT_NAME) to use your location."
@@ -62,4 +49,4 @@ export default {
       "reactCompiler": true
     }
   }
-};
+}

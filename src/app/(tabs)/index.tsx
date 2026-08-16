@@ -1,5 +1,3 @@
-import HomeMap from '../../components/map/HomeMap';
-import { Coordinate, Address } from '../../types/location';
 import { colors } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import BottomSheet, { BottomSheetScrollView } from '@gorhom/bottom-sheet';
@@ -8,6 +6,8 @@ import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useMemo, useRef, useState } from 'react';
 import { Dimensions, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import HomeMap from '../../components/map/HomeMap';
+import { Address, Coordinate } from '../../types/location';
 
 const { width } = Dimensions.get('window');
 
@@ -32,8 +32,7 @@ export default function HomeScreen() {
             <StatusBar style="dark" />
 
             {/* --- MAP LAYER --- */}
-            {/* Using zIndex: 0 and strict absolute filling so it lives natively behind the BottomSheet */}
-            <View style={[StyleSheet.absoluteFill, { zIndex: 0, elevation: 0 }]}>
+            <View style={{ flex: 1 }}>
                 <HomeMap onPickupLocationChange={handlePickupChange} />
             </View>
             {/* --- END MAP LAYER --- */}

@@ -2,10 +2,20 @@ import { colors } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useRef, useState } from 'react';
 import { Dimensions, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import MapView, { PROVIDER_GOOGLE, Region } from 'react-native-maps';
+import MapView, { Region } from 'react-native-maps';
 import { useUserLocation } from '../../hooks/useUserLocation';
 import { formatAddress, reverseGeocode } from '../../services/location/geocodingService';
 import { Address, Coordinate } from '../../types/location';
+
+// Default fallback region (Visakhapatnam) — used only until real GPS arrives
+const DEFAULT_REGION: Region = {
+    latitude: 17.6868,
+    longitude: 83.2185,
+    latitudeDelta: 0.01,
+    longitudeDelta: 0.01,
+};
+
+const SCREEN_HEIGHT = Dimensions.get('window').height;
 
 interface HomeMapProps {
     onPickupLocationChange: (coordinate: Coordinate, address: Address | null) => void;
@@ -13,18 +23,16 @@ interface HomeMapProps {
 
 export default function HomeMap({ onPickupLocationChange }: HomeMapProps) {
     const mapRef = useRef<MapView>(null);
-    const { currentUserLocation, locationServicesEnabled, permissionStatus } = useUserLocation();
+    const { currentUserLocation } = useUserLocation();
 
-    const [isMapMoving, setIsMapMoving] = useState(false);
     const [mapReady, setMapReady] = useState(false);
     const [pickupCoord, setPickupCoord] = useState<Coordinate | null>(null);
     const [pickupAddress, setPickupAddress] = useState<Address | null>(null);
     const [initialRegionSet, setInitialRegionSet] = useState(false);
 
     const geocodeRequestId = useRef(0);
-    const { height } = Dimensions.get('window');
 
-    // Initial centering when user location is first found
+    // ---- Initial centering when real GPS arrives ----
     useEffect(() => {
         if (currentUserLocation && mapReady && !initialRegionSet) {
             mapRef.current?.animateToRegion({
@@ -34,71 +42,62 @@ export default function HomeMap({ onPickupLocationChange }: HomeMapProps) {
                 longitudeDelta: 0.005,
             }, 1000);
             setInitialRegionSet(true);
-
-            // Set initial pickup identical to current location
             handleSettledCoord(currentUserLocation);
         }
     }, [currentUserLocation, mapReady, initialRegionSet]);
 
+    // ---- Reverse-geocode the settled coordinate ----
     const handleSettledCoord = async (coord: Coordinate) => {
         setPickupCoord(coord);
-
         const currentReqId = ++geocodeRequestId.current;
         const addressData = await reverseGeocode(coord);
-
         if (currentReqId === geocodeRequestId.current) {
             setPickupAddress(addressData);
             onPickupLocationChange(coord, addressData);
         }
     };
 
-    const handleRegionChangeComplete = async (region: Region, details: { isGesture?: boolean }) => {
-        setIsMapMoving(false);
-        if (details.isGesture) {
+    // ---- Map gesture callbacks ----
+    const handleRegionChangeComplete = (region: Region, details: { isGesture?: boolean }) => {
+        if (details?.isGesture) {
             handleSettledCoord({
                 latitude: region.latitude,
-                longitude: region.longitude
+                longitude: region.longitude,
             });
         }
     };
 
-    const handleRegionChangeStart = () => {
-        setIsMapMoving(true);
-    };
-
+    // ---- Current-location button ----
     const handleCurrentLocationTap = () => {
         if (!currentUserLocation) return;
-
         mapRef.current?.animateToRegion({
             latitude: currentUserLocation.latitude,
             longitude: currentUserLocation.longitude,
             latitudeDelta: 0.005,
             longitudeDelta: 0.005,
         }, 1000);
-
         handleSettledCoord(currentUserLocation);
     };
 
     const { title, subtitle } = formatAddress(pickupAddress);
 
     return (
-        <View style={StyleSheet.absoluteFill}>
+        <View style={styles.container}>
+
+            {/* ===================== MAP ===================== */}
             <MapView
                 ref={mapRef}
-                style={StyleSheet.absoluteFill}
-                provider={PROVIDER_GOOGLE}
-                mapPadding={{ top: 0, left: 0, right: 0, bottom: height * 0.48 }}
+                style={styles.map}
+                initialRegion={DEFAULT_REGION}
                 showsUserLocation={true}
                 showsMyLocationButton={false}
                 showsCompass={false}
                 onMapReady={() => setMapReady(true)}
                 onRegionChangeComplete={handleRegionChangeComplete}
-                onRegionChange={handleRegionChangeStart}
             />
 
-            {/* Fixed Center Pickup Marker */}
-            {/* Hides gently or visually adjusts if needed, but per spec remains visually fixed */}
-            <View style={styles.pickupMarkerContainer}>
+            {/* ============= FIXED CENTER PICKUP CURSOR ============= */}
+            <View style={styles.pickupMarkerContainer} pointerEvents="none">
                 <View style={styles.pickupPill}>
                     <Text style={styles.pickupPillText}>Pickup Point</Text>
                 </View>
@@ -107,7 +106,6 @@ export default function HomeMap({ onPickupLocationChange }: HomeMapProps) {
                     <View style={styles.pickupDotInner} />
                 </View>
 
-                {/* Dynamically display reverse-geocoded title! */}
                 {pickupCoord ? (
                     <Text style={styles.pickupTitle} numberOfLines={1}>{title}</Text>
                 ) : (
@@ -116,7 +114,7 @@ export default function HomeMap({ onPickupLocationChange }: HomeMapProps) {
                 <Text style={styles.pickupSubtitle} numberOfLines={1}>{subtitle}</Text>
             </View>
 
-            {/* Current Address P33W+PG3... style floating card */}
+            {/* ============= ADDRESS CARD + GPS BUTTON ============= */}
             <View style={styles.currentAddressCard}>
                 <View style={styles.addressLeft}>
                     <View style={styles.greenRing}>
@@ -135,26 +133,30 @@ export default function HomeMap({ onPickupLocationChange }: HomeMapProps) {
 }
 
 const styles = StyleSheet.create({
+    container: {
+        flex: 1,
+    },
+    map: {
+        width: '100%',
+        height: '100%',
+    },
     pickupMarkerContainer: {
         position: 'absolute',
-        top: '25%', // Carefully balanced above the 48% sheet
+        top: '25%',
         left: '50%',
         transform: [{ translateX: -60 }],
         alignItems: 'center',
-        elevation: 1,
-        // pointerEvents none so users can pan the map *through* this overlay UI
-        pointerEvents: 'none',
     },
     pickupPill: {
         backgroundColor: colors.green,
         paddingHorizontal: 12,
         paddingVertical: 6,
         borderRadius: 20,
-        elevation: 1,
+        elevation: 4,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.1,
-        shadowRadius: 2,
+        shadowOpacity: 0.15,
+        shadowRadius: 3,
     },
     pickupPillText: {
         color: colors.white,
@@ -163,7 +165,7 @@ const styles = StyleSheet.create({
     },
     pickupStem: {
         width: 1.5,
-        height: 12, // Ensure same stem height as original design
+        height: 12,
         backgroundColor: colors.green,
     },
     pickupDot: {
@@ -191,7 +193,7 @@ const styles = StyleSheet.create({
         textShadowOffset: { width: 0, height: 1 },
         textShadowRadius: 3,
         textAlign: 'center',
-        width: 150, // bounding width for dynamic text
+        width: 150,
     },
     pickupSubtitle: {
         fontSize: 12,
@@ -215,7 +217,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        elevation: 2,
+        elevation: 4,
         shadowColor: colors.ink,
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.08,
