@@ -192,6 +192,10 @@ export default function HomeMap({ onPickupLocationChange }: HomeMapProps) {
         let longitude: number | undefined;
         let latitude: number | undefined;
 
+        // **CRITICAL FIX**: Extract properties synchronously before React nullifies the SyntheticEvent pool
+        const syncNativeCenter = event?.nativeEvent?.center;
+        const syncGeometryCoords = event?.geometry?.coordinates;
+
         // 1. Ask MapLibre directly for the mathematically true viewport center
         if (Platform.OS !== 'web' && mapRef.current) {
             try {
@@ -204,13 +208,12 @@ export default function HomeMap({ onPickupLocationChange }: HomeMapProps) {
             }
         }
 
-        // 2. Fallback to event payloads structurally
+        // 2. Fallback to the synchronously captured event payloads
         if (!longitude || !latitude) {
-            const nativeCenter = event?.nativeEvent?.center;
-            if (nativeCenter && Array.isArray(nativeCenter)) {
-                [longitude, latitude] = nativeCenter;
-            } else if (event?.geometry?.coordinates) {
-                [longitude, latitude] = event.geometry.coordinates;
+            if (syncNativeCenter && Array.isArray(syncNativeCenter)) {
+                [longitude, latitude] = syncNativeCenter;
+            } else if (syncGeometryCoords) {
+                [longitude, latitude] = syncGeometryCoords;
             }
         }
 

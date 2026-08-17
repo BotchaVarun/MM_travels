@@ -8,6 +8,7 @@ import { useMemo, useRef, useState } from 'react';
 import { Dimensions, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import HomeMap from '../../components/map/HomeMap';
 import { AllServicesModal } from '../../components/ui/AllServicesModal';
+import { formatAddress } from '../../services/location/geocodingService';
 import { Address, Coordinate } from '../../types/location';
 
 const SERVICES = [
@@ -36,6 +37,25 @@ export default function HomeScreen() {
         setSelectedAddress(location);
     };
 
+    const navToDestination = () => {
+        if (selectedCoord) {
+            let title = 'Current Location';
+            if (selectedAddress) {
+                title = formatAddress(selectedAddress).title;
+            }
+            router.push({
+                pathname: '/destination',
+                params: {
+                    lat: selectedCoord.latitude.toString(),
+                    lng: selectedCoord.longitude.toString(),
+                    pickupTitle: title
+                }
+            });
+        } else {
+            router.push('/destination');
+        }
+    };
+
     return (
         <View style={styles.container}>
             <StatusBar style="dark" />
@@ -60,7 +80,7 @@ export default function HomeScreen() {
                 <BottomSheetScrollView contentContainerStyle={styles.sheetScrollContent} showsVerticalScrollIndicator={false}>
 
                     {/* SEARCH BAR */}
-                    <TouchableOpacity activeOpacity={0.9} style={styles.searchBar}>
+                    <TouchableOpacity activeOpacity={0.9} style={styles.searchBar} onPress={navToDestination}>
                         <Ionicons name="search" size={20} color={colors.ink} style={{ marginRight: 10 }} />
                         <Text style={styles.searchPlaceholderText}>Where do you want to go?</Text>
                     </TouchableOpacity>
