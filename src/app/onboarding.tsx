@@ -1,11 +1,11 @@
 import { Button } from '@/components/ui/Button';
 import { colors, radius, spacing, typography } from '@/constants/theme';
-import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { useRef, useState } from 'react';
 import {
     FlatList,
+    Image,
     StyleSheet,
     Text,
     TouchableOpacity,
@@ -20,46 +20,32 @@ const SLIDES = [
         title: 'Discover',
         subtitle: 'Find the best routes and vehicle options for your journey.',
         illustrationType: 'map',
-        colors: ['#4ADE80', '#22C55E'],
-        icon: 'map',
+        image: require('../../assets/images/onboarding_1.png'),
     },
     {
         id: '2',
         title: 'Compare Verified Fleets',
         subtitle: 'Choose from a variety of trusted and verified vehicles.',
         illustrationType: 'car',
-        colors: ['#FDE047', '#EAB308'],
-        icon: 'car-sport',
+        image: require('../../assets/images/onboarding_2.png'),
     },
     {
         id: '3',
         title: 'Book With Confidence',
         subtitle: 'Secure payments, live tracking, and dedicated support.',
         illustrationType: 'shield',
-        colors: ['#93C5FD', '#3B82F6'],
-        icon: 'shield-checkmark',
+        image: require('../../assets/images/onboarding_3.png'),
     },
 ];
 
-// Replaced static shapes with beautiful gradient meshes and vector iconography
 const IllustrationPlaceholder = ({ slide }: { slide: typeof SLIDES[0] }) => {
     return (
         <View style={styles.illustrationWrapper}>
-            <LinearGradient
-                colors={slide.colors as [string, string]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={[
-                    styles.shape,
-                    {
-                        borderRadius: slide.illustrationType === 'shield' ? 50 : 20,
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                    }
-                ]}
-            >
-                <Ionicons name={slide.icon as any} size={80} color="#FFFFFF" style={{ opacity: 0.9 }} />
-            </LinearGradient>
+            <Image
+                source={slide.image}
+                style={styles.illustrationImage}
+                resizeMode="contain"
+            />
         </View>
     );
 };
@@ -70,8 +56,13 @@ export default function OnboardingScreen() {
     const [currentIndex, setCurrentIndex] = useState(0);
     const flatListRef = useRef<FlatList>(null);
 
-    const handleSkip = () => {
+    const handleSkip = async () => {
         // Navigate to Mobile Number Entry and persist completed onboarding flag
+        try {
+            await AsyncStorage.setItem('hasOnboarded', 'true');
+        } catch (e) {
+            console.warn('Failed to save onboarding status', e);
+        }
         router.replace('/mobile-number');
     };
 
@@ -153,7 +144,7 @@ export default function OnboardingScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: colors.navy900,
+        backgroundColor: colors.white,
     },
     header: {
         flexDirection: 'row',
@@ -168,7 +159,7 @@ const styles = StyleSheet.create({
         alignItems: 'flex-end',
     },
     skipText: {
-        color: '#B9C2D4',
+        color: colors.inkSoft,
         fontSize: 12,
         fontWeight: '600',
     },
@@ -183,20 +174,15 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     illustrationWrapper: {
-        width: 180,
-        height: 180,
+        width: 340,
+        height: 340,
         justifyContent: 'center',
         alignItems: 'center',
         marginBottom: 20,
     },
-    shape: {
-        width: 150,
-        height: 150,
-        elevation: 10,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.15,
-        shadowRadius: 10,
+    illustrationImage: {
+        width: '100%',
+        height: '100%',
     },
     paginationContainer: {
         flexDirection: 'row',
@@ -214,7 +200,7 @@ const styles = StyleSheet.create({
     },
     inactiveDot: {
         width: 6,
-        backgroundColor: '#3A4459',
+        backgroundColor: '#E2E8F0',
     },
     copySheet: {
         backgroundColor: colors.white,

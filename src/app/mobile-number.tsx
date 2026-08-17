@@ -1,9 +1,10 @@
 import { Button } from '@/components/ui/Button';
 import { colors, radius, spacing, typography } from '@/constants/theme';
-import { FontAwesome5, Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
+    Image,
     KeyboardAvoidingView,
     Platform,
     StyleSheet,
@@ -41,12 +42,10 @@ export default function MobileNumberScreen() {
                 {/* Illustration Zone */}
                 <View style={styles.illustrationZone}>
                     <View style={styles.circleBackground}>
-                        <Ionicons name="car-outline" size={64} color="#A5B8DC" style={styles.carIcon} />
-                        <FontAwesome5
-                            name="suitcase-rolling"
-                            size={28}
-                            color={colors.goldDark}
-                            style={styles.luggageIcon}
+                        <Image
+                            source={require('../../assets/images/icon.png')}
+                            style={{ width: 200, height: 200, borderRadius: 100, overflow: 'hidden' }}
+                            resizeMode="cover"
                         />
                     </View>
                 </View>

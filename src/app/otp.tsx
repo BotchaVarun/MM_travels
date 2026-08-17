@@ -2,8 +2,9 @@ import { BackHeader } from '@/components/ui/BackHeader';
 import { Button } from '@/components/ui/Button';
 import { colors, spacing } from '@/constants/theme';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
+    Image,
     KeyboardAvoidingView,
     Platform,
     Pressable,
@@ -93,6 +94,15 @@ export default function OTPScreen() {
                 <BackHeader title="Verify your number" />
 
                 <View style={styles.content}>
+                    {/* Illustration Zone added from splash style request */}
+                    <View style={styles.centerStage}>
+                        <Image
+                            source={require('../../assets/images/icon.png')}
+                            style={styles.logoImage}
+                            resizeMode="cover"
+                        />
+                    </View>
+
                     {/* Subcopy Section */}
                     <View style={styles.subcopyContainer}>
                         <Text style={styles.subcopyText}>
@@ -172,7 +182,17 @@ const styles = StyleSheet.create({
     content: {
         flex: 1,
         paddingHorizontal: spacing.screenPadX,
-        paddingTop: 32,
+        paddingTop: 16,
+    },
+    centerStage: {
+        alignItems: 'center',
+        marginVertical: 24,
+    },
+    logoImage: {
+        width: 200,
+        height: 200,
+        borderRadius: 100,
+        overflow: 'hidden',
     },
     subcopyContainer: {
         marginBottom: 32,

@@ -1,5 +1,6 @@
 import { ThreeDotPulse } from '@/components/ThreeDotPulse';
 import { colors } from '@/constants/theme';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { useEffect } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
@@ -14,8 +15,18 @@ export default function SplashScreenComponent() {
     // We removed the opacity fade because it causes a blink.
 
     // Extend splash time to 2.5s total before routing
-    const timer = setTimeout(() => {
-      router.replace('/onboarding');
+    const timer = setTimeout(async () => {
+      try {
+        const hasOnboarded = await AsyncStorage.getItem('hasOnboarded');
+        if (hasOnboarded === 'true') {
+          router.replace('/mobile-number');
+        } else {
+          router.replace('/onboarding');
+        }
+      } catch (e) {
+        // Fallback to onboarding on error
+        router.replace('/onboarding');
+      }
     }, 2500);
 
     return () => clearTimeout(timer);
@@ -34,9 +45,9 @@ export default function SplashScreenComponent() {
         {/* Animated Image replacing the old text logo */}
         <Animated.View style={animatedLogoStyle}>
           <Image
-            source={require('../../assets/images/splash-icon.png')}
+            source={require('../../assets/images/icon.png')}
             style={styles.logoImage}
-            resizeMode="contain"
+            resizeMode="cover"
           />
         </Animated.View>
 
@@ -63,8 +74,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   logoImage: {
-    width: 140, // Adjust this baseline size based on the asset actual bounds
-    height: 140,
+    width: 200,
+    height: 200,
+    borderRadius: 100, // Makes it a perfect circle
+    overflow: 'hidden',
   },
   pulseContainer: {
     marginTop: 24,
