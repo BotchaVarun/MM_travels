@@ -1,6 +1,7 @@
 import { Button } from '@/components/ui/Button';
 import { colors, radius, spacing, typography } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
+import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
@@ -18,13 +19,50 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 export default function MobileNumberScreen() {
     const router = useRouter();
     const [phoneNumber, setPhoneNumber] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
 
-    const handleContinue = () => {
-        // Navigate to A4 OTP Verification
-        router.push('/otp');
+    const handleContinue = async () => {
+        setIsLoading(true);
+        try {
+            // Force URL based on loopback or local ip. React Native uses 10.0.2.2 for Android local host
+            const baseUrl = Platform.OS === 'android' ? 'http://10.0.2.2:5000' : 'http://localhost:5000';
+
+            const response = await fetch(`${baseUrl}/api/auth/send-whatsapp-otp`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ phone: phoneNumber }),
+            });
+
+            const data = await response.json();
+
+            setIsLoading(false);
+            if (response.ok) {
+                // Pass phone dynamically so OTP knows who to verify
+                router.push({ pathname: '/otp', params: { phone: phoneNumber } });
+            } else {
+                alert(data.error || 'Failed to send OTP via WhatsApp');
+            }
+        } catch (error) {
+            setIsLoading(false);
+            alert('Cannot connect to backend server. Make sure it is running!');
+            console.log(error);
+        }
     };
 
-    const isButtonDisabled = phoneNumber.length < 10;
+    const handleSkip = async () => {
+        try {
+            const { status } = await Location.getForegroundPermissionsAsync();
+            if (status === 'granted') {
+                router.replace('/(tabs)');
+            } else {
+                router.replace('/permissions');
+            }
+        } catch (error) {
+            router.replace('/permissions');
+        }
+    };
+
+    const isButtonDisabled = phoneNumber.length < 10 || isLoading;
 
     return (
         <SafeAreaView edges={['top']} style={styles.container}>
@@ -34,7 +72,7 @@ export default function MobileNumberScreen() {
             >
                 {/* Top Header */}
                 <View style={styles.header}>
-                    <TouchableOpacity onPress={() => router.push('/otp')} style={styles.skipButton}>
+                    <TouchableOpacity onPress={handleSkip} style={styles.skipButton}>
                         <Text style={styles.skipText}>Skip</Text>
                     </TouchableOpacity>
                 </View>

@@ -51,7 +51,7 @@ export default function RideSelectionScreen() {
             setRouteError(true);
             setIsCalculating(false);
         }
-    }, [params]);
+    }, [params.pickupLat, params.pickupLng, params.dropLat, params.dropLng]);
 
     const fetchRouteAndEstimates = async (pickup: Coordinate, drop: Coordinate) => {
         setIsCalculating(true);

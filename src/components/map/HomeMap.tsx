@@ -245,6 +245,21 @@ export default function HomeMap({ onPickupLocationChange }: HomeMapProps) {
 
     const { title, subtitle } = formatAddress(pickupAddress);
 
+    // Calculate dynamic display text for the precise address card bar based on user specs
+    let addressBarText = 'Unknown Location';
+    if (isGeocoding) {
+        addressBarText = 'Locating...';
+    } else if (pickupCoord) {
+        const lat = pickupCoord.latitude.toFixed(5);
+        const lng = pickupCoord.longitude.toFixed(5);
+
+        const fullAddress = pickupAddress
+            ? ((pickupAddress as any).formatted_address || (pickupAddress as any).display_name || subtitle || title)
+            : 'Unknown Location';
+
+        addressBarText = `${lat}, ${lng} - ${fullAddress}`;
+    }
+
     return (
         <View style={styles.container}>
 
@@ -307,7 +322,7 @@ export default function HomeMap({ onPickupLocationChange }: HomeMapProps) {
                         <View style={styles.greenDot} />
                     </View>
                     <Text style={styles.addressText} numberOfLines={1}>
-                        {isGeocoding ? 'Locating...' : (pickupCoord ? (pickupAddress?.name || title) : 'Unknown Location')}
+                        {addressBarText}
                     </Text>
                 </View>
                 <TouchableOpacity activeOpacity={0.7} style={styles.gpsButton} onPress={handleCurrentLocationTap}>
