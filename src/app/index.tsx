@@ -17,14 +17,23 @@ export default function SplashScreenComponent() {
     // Extend splash time to 2.5s total before routing
     const timer = setTimeout(async () => {
       try {
+        // Check local storage for persistent flags
         const hasOnboarded = await AsyncStorage.getItem('hasOnboarded');
+        const userToken = await AsyncStorage.getItem('userToken');
+
         if (hasOnboarded === 'true') {
-          router.replace('/mobile-number');
+          if (userToken) {
+            // User is fully authenticated, skip entirely to Map
+            router.replace('/(tabs)');
+          } else {
+            // User has seen slides but is logged out
+            router.replace('/mobile-number');
+          }
         } else {
           router.replace('/onboarding');
         }
-      } catch (e) {
-        // Fallback to onboarding on error
+      } catch (error) {
+        console.error("Failed to read App State:", error);
         router.replace('/onboarding');
       }
     }, 2500);

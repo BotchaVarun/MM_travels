@@ -1,6 +1,7 @@
 import { BackHeader } from '@/components/ui/BackHeader';
 import { Button } from '@/components/ui/Button';
 import { colors, spacing } from '@/constants/theme';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -51,7 +52,7 @@ export default function OTPScreen() {
         if (timeLeft > 0) return;
 
         try {
-            const baseUrl = Platform.OS === 'android' ? 'http://10.0.2.2:5000' : 'http://localhost:5000';
+            const baseUrl = 'http://10.200.240.210:5000';
             await fetch(`${baseUrl}/api/auth/send-whatsapp-otp`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -67,7 +68,7 @@ export default function OTPScreen() {
     const handleVerify = async () => {
         setIsVerifying(true);
         try {
-            const baseUrl = Platform.OS === 'android' ? 'http://10.0.2.2:5000' : 'http://localhost:5000';
+            const baseUrl = 'http://10.200.240.210:5000';
             const response = await fetch(`${baseUrl}/api/auth/verify-otp`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -78,9 +79,15 @@ export default function OTPScreen() {
             setIsVerifying(false);
 
             if (response.ok) {
+                // Securely save the session token so they don't have to login tomorrow
+                await AsyncStorage.setItem('userToken', data.token);
+
                 // Dynamically route: If new user -> profile-reg, else -> home (mocked logic)
                 if (data.isNewUser) {
-                    router.replace('/profile-registration');
+                    router.replace({
+                        pathname: '/profile-registration',
+                        params: { phone }
+                    });
                 } else {
                     router.replace('/(tabs)');
                 }

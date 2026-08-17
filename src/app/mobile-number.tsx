@@ -24,8 +24,8 @@ export default function MobileNumberScreen() {
     const handleContinue = async () => {
         setIsLoading(true);
         try {
-            // Force URL based on loopback or local ip. React Native uses 10.0.2.2 for Android local host
-            const baseUrl = Platform.OS === 'android' ? 'http://10.0.2.2:5000' : 'http://localhost:5000';
+            // Force URL to your machine's strict local IP because you are using a PHYSICAL device (--device)
+            const baseUrl = 'http://10.200.240.210:5000';
 
             const response = await fetch(`${baseUrl}/api/auth/send-whatsapp-otp`, {
                 method: 'POST',

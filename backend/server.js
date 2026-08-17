@@ -1,8 +1,14 @@
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
+const { createClient } = require('@supabase/supabase-js');
 
 dotenv.config();
+
+// Initialize Supabase Admin Client
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 const app = express();
 app.use(cors());
@@ -58,18 +64,55 @@ app.post('/api/auth/verify-otp', async (req, res) => {
     if (record.otp === code) {
         otpStore.delete(phone);
 
-        // TODO: Generate a Supabase custom JWT or strict session token here once Supabase is linked
+        // TODO: Validate/Insert user into Supabase profiles table
+        // const { data, error } = await supabase.from('profiles').upsert({ phone: phone }).select().single();
+
+        // Generate a custom or mock token
         const demoToken = 'mock_jwt_token_for_' + phone;
+
+        console.log(`[AUTH-SUCCESS] User +91${phone} entered CORRECT OTP: ${code}`);
 
         return res.status(200).json({
             success: true,
             message: 'Verification successful',
             token: demoToken,
-            isNewUser: true // Dynamic flag to force Profile Registration
+            isNewUser: true // Set to false if data shows they are an existing user in Supabase
         });
     }
 
+    console.log(`[AUTH-FAILED] User +91${phone} entered WRONG OTP: ${code}. Expected: ${record.otp}`);
     return res.status(400).json({ success: false, error: 'Invalid OTP' });
+});
+
+// Profile Registration Endpoint
+app.post('/api/users/profile', async (req, res) => {
+    const { phone, fullName, email, gender, emergencyName, emergencyPhone } = req.body;
+
+    if (!phone) {
+        return res.status(400).json({ error: 'Phone number is required' });
+    }
+
+    try {
+        const { data, error } = await supabase
+            .from('profiles')
+            .upsert({
+                phone,
+                full_name: fullName,
+                email,
+                gender,
+                emergency_contact_name: emergencyName,
+                emergency_contact_phone: emergencyPhone
+            }, { onConflict: 'phone' })
+            .select()
+            .single();
+
+        if (error) throw error;
+
+        return res.status(200).json({ success: true, profile: data });
+    } catch (err) {
+        console.error('Supabase Profile Error:', err);
+        return res.status(500).json({ error: 'Failed to save profile data.' });
+    }
 });
 
 const PORT = process.env.PORT || 5000;
