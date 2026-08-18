@@ -1,6 +1,6 @@
 import { colors } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
-import { Camera, Map } from '@maplibre/maplibre-react-native'; // Native MapEngine Replacement
+import Mapbox, { Camera, LocationPuck, MapView } from '@rnmapbox/maps';
 import { useEffect, useRef, useState } from 'react';
 import { Dimensions, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useUserLocation } from '../../hooks/useUserLocation';
@@ -26,6 +26,9 @@ interface HomeMapProps {
     onPickupLocationChange: (coordinate: Coordinate, address: Address | null) => void;
     driverLocations?: DriverLocation[]; // Future Phase Integration
 }
+
+// Initialize Mapbox with the public client token configured by EAS or Local .env
+Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN ?? '');
 
 // Leaflet HTML source document for web rendering
 const leafletHtml = `
@@ -150,10 +153,10 @@ export default function HomeMap({ onPickupLocationChange }: HomeMapProps) {
                         zoom: 15
                     }, '*');
                 } else {
-                    cameraRef.current?.flyTo({
-                        center: [currentUserLocation.longitude, currentUserLocation.latitude],
-                        zoom: 14,
-                        duration: 1000,
+                    cameraRef.current?.setCamera({
+                        centerCoordinate: [currentUserLocation.longitude, currentUserLocation.latitude],
+                        zoomLevel: 14,
+                        animationDuration: 1000,
                     });
                 }
                 setInitialRegionSet(true);
@@ -182,43 +185,47 @@ export default function HomeMap({ onPickupLocationChange }: HomeMapProps) {
         }
     };
 
-    // ---- MapLibre native gesture callbacks ----
-    const handleRegionDidChange = async (event: any) => {
-        // Native MapLibre wraps event payloads in nativeEvent.
-        // We drop the strict 'isUserInteraction' boolean flag check here because some custom Android ROMs 
-        // drop this property during rapid panning NativeSyntheticEvents, creating silent UI failures.
-        // Fast redundant hooks are completely safely neutralized by the geocoding coordinate-level deduplication cache.
+    // ---- Mapbox native gesture callbacks ----
+    const debounceTimer = useRef<NodeJS.Timeout | null>(null);
+
+    const reverseGeocodeCoordinates = async (lat: number, lng: number) => {
+        try {
+            const coord = { latitude: lat, longitude: lng };
+            const currentReqId = ++geocodeRequestId.current;
+            const addressData = await reverseGeocode(coord);
+            if (currentReqId === geocodeRequestId.current) {
+                setPickupCoord(coord);
+                setPickupAddress(addressData);
+                onPickupLocationChange(coord, addressData);
+            }
+        } catch (error) {
+            console.error("Reverse geocoding error:", error);
+        } finally {
+            setIsGeocoding(false);
+        }
+    };
+
+    const handleCameraChanged = (state: any) => {
+        // Only mark moving visually if actually dragged
+        if (!isGeocoding) setIsGeocoding(true);
+
+        const propertiesCenter = state?.properties?.center;
+        const geometryCoords = state?.geometry?.coordinates;
 
         let longitude: number | undefined;
         let latitude: number | undefined;
 
-        // **CRITICAL FIX**: Extract properties synchronously before React nullifies the SyntheticEvent pool
-        const syncNativeCenter = event?.nativeEvent?.center;
-        const syncGeometryCoords = event?.geometry?.coordinates;
-
-        // 1. Ask MapLibre directly for the mathematically true viewport center
-        if (Platform.OS !== 'web' && mapRef.current) {
-            try {
-                const center = await mapRef.current.getCenter();
-                if (center && Array.isArray(center)) {
-                    [longitude, latitude] = center;
-                }
-            } catch (e) {
-                console.warn("Could not retrieve center directly from map instance", e);
-            }
+        if (propertiesCenter && Array.isArray(propertiesCenter) && propertiesCenter.length >= 2) {
+            [longitude, latitude] = propertiesCenter;
+        } else if (geometryCoords && Array.isArray(geometryCoords) && geometryCoords.length >= 2) {
+            [longitude, latitude] = geometryCoords;
         }
 
-        // 2. Fallback to the synchronously captured event payloads
-        if (!longitude || !latitude) {
-            if (syncNativeCenter && Array.isArray(syncNativeCenter)) {
-                [longitude, latitude] = syncNativeCenter;
-            } else if (syncGeometryCoords) {
-                [longitude, latitude] = syncGeometryCoords;
-            }
-        }
-
-        if (longitude && latitude) {
-            handleSettledCoord({ latitude, longitude });
+        if (longitude !== undefined && latitude !== undefined && !isNaN(longitude) && !isNaN(latitude)) {
+            if (debounceTimer.current) clearTimeout(debounceTimer.current);
+            debounceTimer.current = setTimeout(() => {
+                reverseGeocodeCoordinates(latitude!, longitude!);
+            }, 600); // Wait until dragging has definitively stopped
         }
     };
 
@@ -234,10 +241,10 @@ export default function HomeMap({ onPickupLocationChange }: HomeMapProps) {
             }, '*');
             handleSettledCoord(currentUserLocation);
         } else {
-            cameraRef.current?.flyTo({
-                center: [currentUserLocation.longitude, currentUserLocation.latitude],
-                zoom: 14,
-                duration: 1000,
+            cameraRef.current?.setCamera({
+                centerCoordinate: [currentUserLocation.longitude, currentUserLocation.latitude],
+                zoomLevel: 14,
+                animationDuration: 1000,
             });
             handleSettledCoord(currentUserLocation);
         }
@@ -278,23 +285,30 @@ export default function HomeMap({ onPickupLocationChange }: HomeMapProps) {
                     />
                 ) : (
                     <View style={StyleSheet.absoluteFill}>
-                        <Map
+                        <MapView
                             ref={mapRef}
                             style={styles.map}
-                            mapStyle="https://tiles.openfreemap.org/styles/liberty"
-                            logo={false}
-                            attribution={true}
-                            onDidFinishLoadingStyle={() => setMapReady(true)}
-                            onRegionDidChange={handleRegionDidChange}
+                            styleURL={Mapbox.StyleURL.Street}
+                            logoEnabled={false}
+                            attributionEnabled={false}
+                            compassEnabled={false}
+                            onCameraChanged={handleCameraChanged}
+                            onDidFinishLoadingMap={() => setMapReady(true)}
                         >
                             <Camera
                                 ref={cameraRef}
-                                initialViewState={{
-                                    center: [DEFAULT_COORD.longitude, DEFAULT_COORD.latitude],
-                                    zoom: 15,
+                                defaultSettings={{
+                                    centerCoordinate: [DEFAULT_COORD.longitude, DEFAULT_COORD.latitude],
+                                    zoomLevel: 15,
                                 }}
                             />
-                        </Map>
+                            {/* Native pulsing blue GPS indicator for Mapbox */}
+                            <LocationPuck
+                                puckBearingEnabled
+                                puckBearing="heading"
+                                pulsing={{ isEnabled: true }}
+                            />
+                        </MapView>
                     </View>
                 )}
 

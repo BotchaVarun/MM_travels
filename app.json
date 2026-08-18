@@ -47,7 +47,12 @@
           "locationAlwaysAndWhenInUsePermission": "Allow $(PRODUCT_NAME) to use your location."
         }
       ],
-      "@maplibre/maplibre-react-native"
+      [
+        "@rnmapbox/maps",
+        {
+          "RNMapboxDownloadToken": "MAPBOX_DOWNLOADS_TOKEN"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

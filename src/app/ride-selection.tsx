@@ -1,6 +1,6 @@
 import { colors } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
-import { Camera, GeoJSONSource, Layer, Map } from '@maplibre/maplibre-react-native';
+import Mapbox, { Camera, CircleLayer, LineLayer, MapView, ShapeSource } from '@rnmapbox/maps';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Dimensions, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -93,8 +93,18 @@ export default function RideSelectionScreen() {
             const sw = [Math.min(...lngs), Math.min(...lats)];
             const ne = [Math.max(...lngs), Math.max(...lats)];
 
-            // Give padding for the bottom sheet UI (50% screen mapping)
-            cameraRef.current.fitBounds(ne, sw, [50, 50, SCREEN_HEIGHT * 0.45, 50], 1000);
+            // Mapbox fitBounds API is nested in camera settings
+            cameraRef.current.setCamera({
+                bounds: {
+                    ne,
+                    sw,
+                    paddingTop: 50,
+                    paddingLeft: 50,
+                    paddingBottom: SCREEN_HEIGHT * 0.45,
+                    paddingRight: 50
+                },
+                animationDuration: 1000
+            });
         }
     };
 
@@ -129,57 +139,54 @@ export default function RideSelectionScreen() {
             {/* MAP AREA */}
             <View style={styles.mapContainer}>
                 {Platform.OS !== 'web' && (pickupCoord || dropCoord) && (
-                    <Map
+                    <MapView
                         ref={mapRef}
                         style={styles.map}
-                        mapStyle="https://tiles.openfreemap.org/styles/liberty"
-                        logo={false}
-                        onDidFinishLoadingStyle={() => setMapReady(true)}
+                        styleURL={Mapbox.StyleURL.Street}
+                        logoEnabled={false}
+                        onDidFinishLoadingMap={() => setMapReady(true)}
                     >
                         <Camera
                             ref={cameraRef}
-                            initialViewState={{
-                                center: [(pickupCoord || dropCoord!).longitude, (pickupCoord || dropCoord!).latitude],
-                                zoom: 14,
+                            defaultSettings={{
+                                centerCoordinate: [(pickupCoord || dropCoord!).longitude, (pickupCoord || dropCoord!).latitude],
+                                zoomLevel: 14,
                             }}
                         />
 
                         {/* THE ROUTE LINE */}
                         {route && mapReady && (
-                            <GeoJSONSource id="routeSource" data={geoJSONRoute as any}>
-                                <Layer
+                            <ShapeSource id="routeSource" shape={geoJSONRoute as any}>
+                                <LineLayer
                                     id="routeLayer"
-                                    type="line"
-                                    paint={{
-                                        'line-color': '#3B82F6',
-                                        'line-width': 4,
-                                    }}
-                                    layout={{
-                                        'line-join': 'round',
-                                        'line-cap': 'round',
+                                    style={{
+                                        lineColor: '#3B82F6',
+                                        lineWidth: 4,
+                                        lineJoin: 'round',
+                                        lineCap: 'round',
                                     }}
                                 />
-                            </GeoJSONSource>
+                            </ShapeSource>
                         )}
 
                         {/* PICKUP MARKER (GREEN) */}
                         {pickupCoord && mapReady && (
-                            <GeoJSONSource id="pickupSource" data={{
+                            <ShapeSource id="pickupSource" shape={{
                                 type: 'Feature', geometry: { type: 'Point', coordinates: [pickupCoord.longitude, pickupCoord.latitude] }, properties: {}
                             } as any}>
-                                <Layer id="pickupLayerRing" type="circle" paint={{ 'circle-color': colors.green, 'circle-radius': 6, 'circle-stroke-width': 2, 'circle-stroke-color': colors.white }} />
-                            </GeoJSONSource>
+                                <CircleLayer id="pickupLayerRing" style={{ circleColor: colors.green, circleRadius: 6, circleStrokeWidth: 2, circleStrokeColor: colors.white }} />
+                            </ShapeSource>
                         )}
                         {/* DROP MARKER (ORANGE) */}
                         {dropCoord && mapReady && (
-                            <GeoJSONSource id="dropSource" data={{
+                            <ShapeSource id="dropSource" shape={{
                                 type: 'Feature', geometry: { type: 'Point', coordinates: [dropCoord.longitude, dropCoord.latitude] }, properties: {}
                             } as any}>
-                                <Layer id="dropLayerRing" type="circle" paint={{ 'circle-color': '#EF4444', 'circle-radius': 6, 'circle-stroke-width': 2, 'circle-stroke-color': colors.white }} />
-                            </GeoJSONSource>
+                                <CircleLayer id="dropLayerRing" style={{ circleColor: '#EF4444', circleRadius: 6, circleStrokeWidth: 2, circleStrokeColor: colors.white }} />
+                            </ShapeSource>
                         )}
                         {/* We use strict absolute RN views for 100% precision with Custom UI Markers mapped geographically */}
-                    </Map>
+                    </MapView>
                 )}
 
                 {/* React Native Fixed Overlay Markers mapping strictly to coordinates */}

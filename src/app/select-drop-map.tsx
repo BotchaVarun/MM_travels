@@ -1,6 +1,6 @@
 import { colors } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
-import { Camera, Map } from '@maplibre/maplibre-react-native';
+import Mapbox, { Camera, MapView } from '@rnmapbox/maps';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -12,7 +12,7 @@ import { Address, Coordinate } from '../types/location';
 export default function SelectDropMapScreen() {
     const router = useRouter();
     const insets = useSafeAreaInsets();
-    const params = useLocalSearchParams<{ lat?: string, lng?: string }>();
+    const params = useLocalSearchParams<{ pickupLat?: string, pickupLng?: string }>();
     const { currentUserLocation } = useUserLocation();
 
     // Map references
@@ -27,11 +27,16 @@ export default function SelectDropMapScreen() {
     const [selectedDropAddress, setSelectedDropAddress] = useState<Address | null>(null);
 
     // Initial setup: Focus on the previously typed location, or User GPS, or fallback
+    const initRef = useRef(false);
+
     useEffect(() => {
+        if (initRef.current) return;
+        initRef.current = true;
+
         let initialCoord: Coordinate = { latitude: 17.6868, longitude: 83.2185 }; // Default Vizag fallback
 
-        if (params.lat && params.lng) {
-            initialCoord = { latitude: parseFloat(params.lat), longitude: parseFloat(params.lng) };
+        if (params.pickupLat && params.pickupLng) {
+            initialCoord = { latitude: parseFloat(params.pickupLat), longitude: parseFloat(params.pickupLng) };
         } else if (currentUserLocation) {
             initialCoord = currentUserLocation;
         }
@@ -45,71 +50,64 @@ export default function SelectDropMapScreen() {
                 animationDuration: 1000,
             });
         }
-    }, [params, currentUserLocation]);
+    }, [params.pickupLat, params.pickupLng, currentUserLocation]);
 
     // Handle Map Center settling
-    const handleRegionDidChange = async (event: any) => {
+    const debounceTimer = useRef<NodeJS.Timeout | null>(null);
+
+    const reverseGeocodeCoordinates = async (lat: number, lng: number) => {
+        try {
+            const coord = { latitude: lat, longitude: lng };
+            setSelectedDropCoord(coord);
+            const addressData = await reverseGeocode(coord);
+            setSelectedDropAddress(addressData);
+        } catch (e) {
+            console.error("Geocoding failed", e);
+        } finally {
+            setIsGeocoding(false);
+        }
+    };
+
+    const handleCameraChanged = (state: any) => {
+        if (!isGeocoding) setIsGeocoding(true);
+
+        const propertiesCenter = state?.properties?.center;
+        const geometryCoords = state?.geometry?.coordinates;
+
         let longitude: number | undefined;
         let latitude: number | undefined;
 
-        const syncNativeCenter = event?.nativeEvent?.center;
-        const syncGeometryCoords = event?.geometry?.coordinates;
-
-        if (Platform.OS !== 'web' && mapRef.current) {
-            try {
-                const center = await mapRef.current.getCenter();
-                if (center && Array.isArray(center)) {
-                    [longitude, latitude] = center;
-                }
-            } catch (e) {
-                console.warn("Could not retrieve center directly from MapLibre", e);
-            }
+        if (propertiesCenter && Array.isArray(propertiesCenter) && propertiesCenter.length >= 2) {
+            [longitude, latitude] = propertiesCenter;
+        } else if (geometryCoords && Array.isArray(geometryCoords) && geometryCoords.length >= 2) {
+            [longitude, latitude] = geometryCoords;
         }
 
-        if (!longitude || !latitude) {
-            if (syncNativeCenter && Array.isArray(syncNativeCenter)) {
-                [longitude, latitude] = syncNativeCenter;
-            } else if (syncGeometryCoords) {
-                [longitude, latitude] = syncGeometryCoords;
-            }
-        }
-
-        if (longitude && latitude) {
-            const coord = { latitude, longitude };
-            setSelectedDropCoord(coord);
-            setIsGeocoding(true);
-
-            // Wait for 1 second throttle safely
-            const addressData = await reverseGeocode(coord);
-            setSelectedDropAddress(addressData);
-            setIsGeocoding(false);
+        if (longitude !== undefined && latitude !== undefined && !isNaN(longitude) && !isNaN(latitude)) {
+            if (debounceTimer.current) clearTimeout(debounceTimer.current);
+            debounceTimer.current = setTimeout(() => {
+                reverseGeocodeCoordinates(latitude!, longitude!);
+            }, 600);
         }
     };
 
     const handleSelectDrop = () => {
         if (!selectedDropCoord) return;
 
-        let title = 'Selected Map Location';
-        let subtitle = 'Unknown area';
-        let formattedStr = '';
-
-        if (selectedDropAddress) {
-            const formatted = formatAddress(selectedDropAddress);
-            title = formatted.title;
-            subtitle = formatted.subtitle;
-            formattedStr = selectedDropAddress.formattedAddress || `${title}, ${subtitle}`;
+        if (!params.pickupLat || !params.pickupLng) {
+            console.warn("Cannot proceed: Missing Pickup Coordinates");
+            router.back();
+            return;
         }
 
-        // Return exactly to the destination configuration
-        router.navigate({
-            pathname: '/destination',
+        // Fulfill PDF Spec: IMMEDIATELY proceed to Ride Selection / Route Generation
+        router.push({
+            pathname: '/ride-selection',
             params: {
-                action: 'mapSelected',
+                pickupLat: params.pickupLat,
+                pickupLng: params.pickupLng,
                 dropLat: selectedDropCoord.latitude.toString(),
-                dropLng: selectedDropCoord.longitude.toString(),
-                dropTitle: title,
-                dropSubtitle: subtitle,
-                dropAddress: formattedStr
+                dropLng: selectedDropCoord.longitude.toString()
             }
         });
     };
@@ -141,21 +139,23 @@ export default function SelectDropMapScreen() {
         <View style={styles.container}>
             {/* FULL SCREEN MAP */}
             {Platform.OS !== 'web' && (
-                <Map
+                <MapView
                     ref={mapRef}
                     style={styles.map}
-                    mapStyle="https://tiles.openfreemap.org/styles/liberty"
-                    logo={false}
-                    onRegionDidChange={handleRegionDidChange}
+                    styleURL={Mapbox.StyleURL.Street}
+                    logoEnabled={false}
+                    attributionEnabled={false}
+                    compassEnabled={false}
+                    onCameraChanged={handleCameraChanged}
                 >
                     <Camera
                         ref={cameraRef}
-                        initialViewState={{
-                            center: [(selectedDropCoord || { longitude: 83.2185 }).longitude, (selectedDropCoord || { latitude: 17.6868 }).latitude],
-                            zoom: 15,
+                        defaultSettings={{
+                            centerCoordinate: [(selectedDropCoord || { longitude: 83.2185 }).longitude, (selectedDropCoord || { latitude: 17.6868 }).latitude],
+                            zoomLevel: 15,
                         }}
                     />
-                </Map>
+                </MapView>
             )}
 
             {/* FIXED CENTER OVERLAY (DROP MARKER) */}

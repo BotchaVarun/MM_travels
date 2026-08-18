@@ -24,8 +24,11 @@ export default function MobileNumberScreen() {
     const handleContinue = async () => {
         setIsLoading(true);
         try {
-            // Force URL to your machine's strict local IP because you are using a PHYSICAL device (--device)
-            const baseUrl = 'http://10.200.240.210:5000';
+            // Defensive fallback against Babel injecting the literal string "undefined"
+            let baseUrl = process.env.EXPO_PUBLIC_API_URL as string;
+            if (!baseUrl || baseUrl === 'undefined') {
+                baseUrl = 'http://10.200.240.61:5000';
+            }
 
             const response = await fetch(`${baseUrl}/api/auth/send-whatsapp-otp`, {
                 method: 'POST',

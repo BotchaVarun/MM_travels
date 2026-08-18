@@ -42,7 +42,8 @@ export default function ProfileRegistrationScreen() {
     const handleSave = async () => {
         setIsSaving(true);
         try {
-            const baseUrl = 'http://10.200.240.210:5000';
+            let baseUrl = process.env.EXPO_PUBLIC_API_URL as string;
+            if (!baseUrl || baseUrl === 'undefined') baseUrl = 'http://10.200.240.61:5000';
             const response = await fetch(`${baseUrl}/api/users/profile`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },

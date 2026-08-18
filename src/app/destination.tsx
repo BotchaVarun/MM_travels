@@ -135,10 +135,11 @@ export default function DestinationScreen() {
     };
 
     const navToMapSelection = () => {
-        // Forward the current Drop coordinates into the map so it centers accurately
-        let queryParams = {};
-        if (dropQuery.trim().length > 0 && params.lat && params.lng) {
-            queryParams = { lat: params.lat, lng: params.lng };
+        // Forward the captured Home pickup coordinates into the Map state unconditionally
+        let queryParams: any = {};
+        if (params.lat && params.lng) {
+            queryParams.pickupLat = params.lat;
+            queryParams.pickupLng = params.lng;
         }
         router.push({ pathname: '/select-drop-map', params: queryParams });
     };

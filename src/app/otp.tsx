@@ -52,7 +52,8 @@ export default function OTPScreen() {
         if (timeLeft > 0) return;
 
         try {
-            const baseUrl = 'http://10.200.240.210:5000';
+            let baseUrl = process.env.EXPO_PUBLIC_API_URL as string;
+            if (!baseUrl || baseUrl === 'undefined') baseUrl = 'http://10.200.240.61:5000';
             await fetch(`${baseUrl}/api/auth/send-whatsapp-otp`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -68,7 +69,8 @@ export default function OTPScreen() {
     const handleVerify = async () => {
         setIsVerifying(true);
         try {
-            const baseUrl = 'http://10.200.240.210:5000';
+            let baseUrl = process.env.EXPO_PUBLIC_API_URL as string;
+            if (!baseUrl || baseUrl === 'undefined') baseUrl = 'http://10.200.240.61:5000';
             const response = await fetch(`${baseUrl}/api/auth/verify-otp`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
