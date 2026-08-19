@@ -1,21 +1,28 @@
 import { colors } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
+import Constants from 'expo-constants';
 import { useEffect, useRef, useState } from 'react';
-import { Dimensions, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import MapView, { Region, UrlTile } from 'react-native-maps';
+import { Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useUserLocation } from '../../hooks/useUserLocation';
 import { formatAddress, reverseGeocode } from '../../services/location/geocodingService';
 import { Address, Coordinate } from '../../types/location';
 
-// Default fallback region (Visakhapatnam) — used only until real GPS arrives
-const DEFAULT_REGION: Region = {
+const DEFAULT_REGION: Coordinate = {
     latitude: 17.6868,
     longitude: 83.2185,
-    latitudeDelta: 0.01,
-    longitudeDelta: 0.01,
 };
 
-const SCREEN_HEIGHT = Dimensions.get('window').height;
+type MapboxModule = typeof import('@rnmapbox/maps').default;
+type MapboxCamera = import('@rnmapbox/maps').Camera;
+type NativeMapView = typeof import('react-native-maps').default;
+const isExpoGo = Constants.appOwnership === 'expo' || Constants.executionEnvironment === 'storeClient';
+const Mapbox = isExpoGo ? null : require('@rnmapbox/maps').default as MapboxModule;
+const NativeMaps = isExpoGo ? require('react-native-maps') as { default: NativeMapView; UrlTile: React.ComponentType<any> } : null;
+const NativeMap = NativeMaps?.default ?? null;
+const mapboxAccessToken = process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN;
+if (mapboxAccessToken && Mapbox) {
+    Mapbox.setAccessToken(mapboxAccessToken);
+}
 
 interface HomeMapProps {
     onPickupLocationChange: (coordinate: Coordinate, address: Address | null) => void;
@@ -95,72 +102,41 @@ const leafletHtml = `
 `;
 
 export default function HomeMap({ onPickupLocationChange }: HomeMapProps) {
-    const mapRef = useRef<MapView>(null);
-    const iframeRef = useRef<any>(null);
+    const cameraRef = useRef<MapboxCamera>(null);
+    const nativeMapRef = useRef<any>(null);
     const { currentUserLocation } = useUserLocation();
 
     const [mapReady, setMapReady] = useState(false);
     const [pickupCoord, setPickupCoord] = useState<Coordinate | null>(null);
     const [pickupAddress, setPickupAddress] = useState<Address | null>(null);
-    const [initialRegionSet, setInitialRegionSet] = useState(false);
 
     const geocodeRequestId = useRef(0);
 
-    // Set mapReady to true immediately on mount for web platform
-    useEffect(() => {
-        if (Platform.OS === 'web') {
-            setMapReady(true);
-        }
-    }, []);
-
-    // ---- Web postMessage listener ----
-    useEffect(() => {
-        if (Platform.OS !== 'web') return;
-
-        const handleWebMessage = (event: MessageEvent) => {
-            if (event.data && event.data.type === 'MAP_MOVE_END') {
-                const { latitude, longitude } = event.data;
-                handleSettledCoord({ latitude, longitude });
-            }
-        };
-
-        window.addEventListener('message', handleWebMessage);
-        return () => {
-            window.removeEventListener('message', handleWebMessage);
-        };
-    }, []);
-
-    // ---- Centering when real GPS arrives ----
     useEffect(() => {
         if (currentUserLocation && mapReady) {
-            if (!initialRegionSet) {
-                if (Platform.OS === 'web') {
-                    iframeRef.current?.contentWindow?.postMessage({
-                        type: 'SET_CENTER',
-                        latitude: currentUserLocation.latitude,
-                        longitude: currentUserLocation.longitude,
-                        zoom: 15
-                    }, '*');
-                } else {
-                    mapRef.current?.animateToRegion({
-                        latitude: currentUserLocation.latitude,
-                        longitude: currentUserLocation.longitude,
-                        latitudeDelta: 0.005,
-                        longitudeDelta: 0.005,
-                    }, 1000);
-                }
-                setInitialRegionSet(true);
-                handleSettledCoord(currentUserLocation);
+            if (Mapbox) {
+                cameraRef.current?.setCamera({
+                    centerCoordinate: [currentUserLocation.longitude, currentUserLocation.latitude],
+                    zoomLevel: 15,
+                    animationDuration: 1000,
+                });
+            } else {
+                nativeMapRef.current?.animateToRegion({
+                    latitude: currentUserLocation.latitude,
+                    longitude: currentUserLocation.longitude,
+                    latitudeDelta: 0.01,
+                    longitudeDelta: 0.01,
+                }, 1000);
             }
+            handleSettledCoord(currentUserLocation);
         }
-    }, [currentUserLocation, mapReady, initialRegionSet]);
+    }, [currentUserLocation, mapReady]);
 
-    // ---- Fallback initialization when map is ready and GPS is slow/unavailable ----
     useEffect(() => {
-        if (mapReady && !initialRegionSet && !currentUserLocation && !pickupCoord) {
+        if (mapReady && !currentUserLocation && !pickupCoord) {
             handleSettledCoord(DEFAULT_REGION);
         }
-    }, [mapReady, initialRegionSet, currentUserLocation, pickupCoord]);
+    }, [mapReady, currentUserLocation, pickupCoord]);
 
     // ---- Reverse-geocode the settled coordinate ----
     const handleSettledCoord = async (coord: Coordinate) => {
@@ -173,74 +149,94 @@ export default function HomeMap({ onPickupLocationChange }: HomeMapProps) {
         }
     };
 
-    // ---- Map gesture callbacks ----
-    const handleRegionChangeComplete = (region: Region, details: { isGesture?: boolean }) => {
-        if (details?.isGesture) {
-            handleSettledCoord({
-                latitude: region.latitude,
-                longitude: region.longitude,
-            });
-        }
+    const handleMapIdle = (state: { properties: { center: number[] } }) => {
+        const [longitude, latitude] = state.properties.center;
+        if (longitude === undefined || latitude === undefined) return;
+        handleSettledCoord({ latitude, longitude });
     };
 
-    // ---- Current-location button ----
+    const handleNativeRegionChange = (region: Coordinate) => {
+        handleSettledCoord({ latitude: region.latitude, longitude: region.longitude });
+    };
+
     const handleCurrentLocationTap = () => {
         if (!currentUserLocation) return;
-        if (Platform.OS === 'web') {
-            iframeRef.current?.contentWindow?.postMessage({
-                type: 'SET_CENTER',
-                latitude: currentUserLocation.latitude,
-                longitude: currentUserLocation.longitude,
-                zoom: 15
-            }, '*');
-            handleSettledCoord(currentUserLocation);
+        if (Mapbox) {
+            cameraRef.current?.setCamera({
+                centerCoordinate: [currentUserLocation.longitude, currentUserLocation.latitude],
+                zoomLevel: 15,
+                animationDuration: 1000,
+            });
         } else {
-            mapRef.current?.animateToRegion({
+            nativeMapRef.current?.animateToRegion({
                 latitude: currentUserLocation.latitude,
                 longitude: currentUserLocation.longitude,
-                latitudeDelta: 0.005,
-                longitudeDelta: 0.005,
+                latitudeDelta: 0.01,
+                longitudeDelta: 0.01,
             }, 1000);
-            handleSettledCoord(currentUserLocation);
         }
+        handleSettledCoord(currentUserLocation);
     };
 
     const { title, subtitle } = formatAddress(pickupAddress);
 
+    if (!Mapbox && !NativeMap) {
+        return (
+            <View style={styles.mapUnavailable}>
+                <Ionicons name="map-outline" size={42} color={colors.inkSoft} />
+                <Text style={styles.mapUnavailableTitle}>Mapbox preview unavailable</Text>
+                <Text style={styles.mapUnavailableText}>Open this app in a custom development build to use the map.</Text>
+            </View>
+        );
+    }
+
+    const ExpoGoMapView = NativeMap as NativeMapView;
+
     return (
         <View style={styles.container}>
-
-            {/* ===================== MAP ===================== */}
-            {Platform.OS === 'web' ? (
-                <iframe
-                    ref={iframeRef}
-                    srcDoc={leafletHtml}
-                    style={{
-                        width: '100%',
-                        height: '100%',
-                        border: 'none',
-                    }}
-                />
-            ) : (
-                <MapView
-                    ref={mapRef}
+            {Mapbox ? (
+                <Mapbox.MapView
                     style={styles.map}
-                    initialRegion={DEFAULT_REGION}
-                    showsUserLocation={true}
-                    showsMyLocationButton={false}
-                    showsCompass={false}
-                    onMapReady={() => setMapReady(true)}
-                    onRegionChangeComplete={handleRegionChangeComplete}
-                    mapType={Platform.OS === 'android' ? 'none' : 'standard'}
+                    styleURL={Mapbox.StyleURL.Street}
+                    compassEnabled={false}
+                    onDidFinishLoadingMap={() => setMapReady(true)}
+                    onMapIdle={handleMapIdle}
                 >
-                    <UrlTile
-                        urlTemplate="https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png"
-                        maximumZ={19}
-                        flipY={false}
-                        shouldReplaceMapContent={true}
-                        zIndex={1}
+                    <Mapbox.Camera
+                        ref={cameraRef}
+                        defaultSettings={{
+                            centerCoordinate: [DEFAULT_REGION.longitude, DEFAULT_REGION.latitude],
+                            zoomLevel: 15,
+                        }}
                     />
-                </MapView>
+                    <Mapbox.UserLocation visible />
+                    <Mapbox.LocationPuck pulsing="default" />
+                </Mapbox.MapView>
+            ) : (
+                <ExpoGoMapView
+                    ref={nativeMapRef}
+                    style={styles.map}
+                    initialRegion={{
+                        ...DEFAULT_REGION,
+                        latitudeDelta: 0.01,
+                        longitudeDelta: 0.01,
+                    }}
+                    mapType={Platform.OS === 'android' ? 'none' : 'standard'}
+                    showsUserLocation
+                    showsMyLocationButton={false}
+                    onMapReady={() => setMapReady(true)}
+                    onRegionChangeComplete={handleNativeRegionChange}
+                >
+                    {NativeMaps && (
+                        <NativeMaps.UrlTile
+                            urlTemplate="https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png"
+                            maximumZ={19}
+                            flipY={false}
+                            shouldReplaceMapContent
+                            zIndex={1}
+                        />
+                    )}
+                </ExpoGoMapView>
             )}
 
             {/* ============= FIXED CENTER PICKUP CURSOR ============= */}
@@ -290,6 +286,26 @@ export default function HomeMap({ onPickupLocationChange }: HomeMapProps) {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
+    },
+    mapUnavailable: {
+        flex: 1,
+        backgroundColor: '#F3F4F6',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 32,
+    },
+    mapUnavailableTitle: {
+        color: colors.ink,
+        fontSize: 17,
+        fontWeight: '700',
+        marginTop: 12,
+    },
+    mapUnavailableText: {
+        color: colors.inkSoft,
+        fontSize: 13,
+        lineHeight: 19,
+        marginTop: 6,
+        textAlign: 'center',
     },
     map: {
         width: '100%',
