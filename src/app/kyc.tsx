@@ -2,8 +2,9 @@ import { BackHeader } from '@/components/ui/BackHeader';
 import { Button } from '@/components/ui/Button';
 import { colors, radius, spacing } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
+import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
     Modal,
     StyleSheet,
@@ -75,9 +76,17 @@ export default function KYCScreen() {
         setActiveDocId(null);
     };
 
-    const navigateToHome = () => {
-        // Navigate strictly to A7 Permissions following the logical flow
-        router.replace('/permissions');
+    const navigateToHome = async () => {
+        try {
+            const { status } = await Location.getForegroundPermissionsAsync();
+            if (status === 'granted') {
+                router.replace('/(tabs)');
+            } else {
+                router.replace('/permissions');
+            }
+        } catch (error) {
+            router.replace('/permissions');
+        }
     };
 
     const renderStatusBanner = () => {

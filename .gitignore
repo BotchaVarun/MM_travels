@@ -37,6 +37,9 @@ yarn-error.*
 # typescript
 *.tsbuildinfo
 
+# backend local environment
+backend/.env
+
 example
 
 # generated native folders

@@ -8,7 +8,15 @@ import { useMemo, useRef, useState } from 'react';
 import { Dimensions, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import HomeMap from '../../components/map/HomeMap';
 import { AllServicesModal } from '../../components/ui/AllServicesModal';
+import { formatAddress } from '../../services/location/geocodingService';
 import { Address, Coordinate } from '../../types/location';
+
+const SERVICES = [
+    { label: 'Shared\nAuto', icon: 'car-sport' },
+    { label: 'Parcel on\nBike', icon: 'bicycle' },
+    { label: 'Auto', icon: 'car-sport' },
+    { label: 'Cab\nEconomy', icon: 'car' },
+];
 
 const { width } = Dimensions.get('window');
 
@@ -21,12 +29,31 @@ export default function HomeScreen() {
     const [selectedCoord, setSelectedCoord] = useState<Coordinate | null>(null);
     const [selectedAddress, setSelectedAddress] = useState<Address | null>(null);
 
-    // Initial snap point leaves map visible. Expanded fills the screen to the top notch.
-    const snapPoints = useMemo(() => ['48%', '94%'], []);
+    // Initial snap point carefully tuned to mimic Rapido's visible collapsed state: Search + Explore + Promo
+    const snapPoints = useMemo(() => ['43%', '94%'], []);
 
     const handlePickupChange = (coord: Coordinate, location: Address | null) => {
         setSelectedCoord(coord);
         setSelectedAddress(location);
+    };
+
+    const navToDestination = () => {
+        if (selectedCoord) {
+            let title = 'Current Location';
+            if (selectedAddress) {
+                title = formatAddress(selectedAddress).title;
+            }
+            router.push({
+                pathname: '/destination',
+                params: {
+                    lat: selectedCoord.latitude.toString(),
+                    lng: selectedCoord.longitude.toString(),
+                    pickupTitle: title
+                }
+            });
+        } else {
+            router.push('/destination');
+        }
     };
 
     return (
@@ -48,92 +75,61 @@ export default function HomeScreen() {
                 snapPoints={snapPoints}
                 handleIndicatorStyle={styles.sheetHandle}
                 backgroundStyle={styles.sheetBackground}
-                style={{ zIndex: 100, elevation: 20 }} // Crucial: forces sheet above everything in the Map Layer!
+                style={{ zIndex: 100, elevation: 20 }}
             >
-                <BottomSheetScrollView
-                    contentContainerStyle={styles.sheetScrollContent}
-                    showsVerticalScrollIndicator={false}
-                >
+                <BottomSheetScrollView contentContainerStyle={styles.sheetScrollContent} showsVerticalScrollIndicator={false}>
 
-                    {/* Destination Search Bar */}
-                    <TouchableOpacity activeOpacity={0.9} style={styles.searchBar}>
-                        <Ionicons name="location-outline" size={22} color={colors.ink} style={{ marginRight: 12 }} />
+                    {/* SEARCH BAR */}
+                    <TouchableOpacity activeOpacity={0.9} style={styles.searchBar} onPress={navToDestination}>
+                        <Ionicons name="search" size={20} color={colors.ink} style={{ marginRight: 10 }} />
                         <Text style={styles.searchPlaceholderText}>Where do you want to go?</Text>
                     </TouchableOpacity>
 
-                    {/* Explore Section */}
+                    {/* EXPLORE SECTION */}
                     <View style={styles.sectionHeader}>
                         <Text style={styles.sectionTitle}>Explore</Text>
-                        <TouchableOpacity
-                            activeOpacity={0.7}
-                            style={styles.viewAllBtn}
-                            onPress={() => servicesModalRef.current?.expand()}
-                        >
+                        <TouchableOpacity style={styles.viewAllBtn} onPress={() => servicesModalRef.current?.expand()}>
                             <Text style={styles.viewAllText}>View All</Text>
                             <Ionicons name="chevron-forward" size={14} color={colors.inkSoft} />
                         </TouchableOpacity>
                     </View>
 
-                    {/* Service Cards Carousel */}
-                    <ScrollView
-                        horizontal
-                        showsHorizontalScrollIndicator={false}
-                        contentContainerStyle={styles.svcRow}
-                    >
-                        {/* Shared Auto */}
-                        <TouchableOpacity activeOpacity={0.7} style={styles.svcCard}>
-                            <View style={[styles.svcIconBlock, { backgroundColor: '#F0FDF4' }]}>
-                                {/* Illustration approximation */}
-                                <LinearGradient colors={['#4ADE80', '#22C55E']} style={styles.vehicleIllustBackground} />
-                                <Ionicons name="car-sport" size={28} color="#064E3B" style={{ marginTop: 6 }} />
+                    {/* SERVICE CARDS (4 Columns) */}
+                    <View style={styles.servicesRow}>
+                        {SERVICES.map((srv, idx) => (
+                            <TouchableOpacity key={idx} activeOpacity={0.8} style={styles.serviceBlock}>
+                                <View style={styles.serviceIconFrame}>
+                                    {/* Mocking the actual vector assets by rendering a colorful gradient shape representing the vehicle bounding-box */}
+                                    <View style={[StyleSheet.absoluteFill, { backgroundColor: '#E2FBE9', borderRadius: 16 }]} />
+                                    <Ionicons name={srv.icon as any} size={28} color="#065F46" style={styles.serviceIconMock} />
+                                </View>
+                                <Text style={styles.serviceLabel}>{srv.label}</Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+
+                    {/* COMPACT PROMOTION BANNER */}
+                    <View style={styles.promoBannerContainer}>
+                        <TouchableOpacity activeOpacity={0.9} style={styles.promoBannerCard}>
+                            <View style={styles.promoBannerContent}>
+                                <Text style={styles.promoBannerHeadline}>FIRST AUTO RIDE FREE</Text>
+                                <Text style={styles.promoBannerSubtext}>offer has been detected.</Text>
+                                <View style={styles.promoBadge}>
+                                    <Text style={styles.promoBadgeText}>Tap here to apply</Text>
+                                </View>
                             </View>
-                            <Text style={styles.svcName} numberOfLines={2}>Shared{'\n'}Auto</Text>
+                            {/* Visual Asset Block */}
+                            <View style={styles.promoBannerGraphic}>
+                                <Ionicons name="gift" size={40} color="rgba(255,255,255,0.1)" />
+                            </View>
                         </TouchableOpacity>
+                    </View>
 
-                        {/* Parcel on Bike */}
-                        <TouchableOpacity activeOpacity={0.7} style={styles.svcCard}>
-                            <View style={[styles.svcIconBlock, { backgroundColor: '#FFFBEB' }]}>
-                                <LinearGradient colors={['#FDE047', '#EAB308']} style={styles.vehicleIllustBackground} />
-                                <Ionicons name="bicycle" size={28} color="#713F12" style={{ marginTop: 6 }} />
-                                <Ionicons name="cube" size={14} color="#713F12" style={{ position: 'absolute', top: 10, right: 10 }} />
-                            </View>
-                            <Text style={styles.svcName} numberOfLines={2}>Parcel on{'\n'}Bike</Text>
-                        </TouchableOpacity>
+                    {/* ========================================================
+                        BELOW THIS LINE IS ONLY VISIBLE IN EXPANDED SNAP POINT 
+                        ======================================================== */}
 
-                        {/* Auto */}
-                        <TouchableOpacity activeOpacity={0.7} style={styles.svcCard}>
-                            <View style={[styles.svcIconBlock, { backgroundColor: '#F0FDF4' }]}>
-                                <LinearGradient colors={['#4ADE80', '#22C55E']} style={styles.vehicleIllustBackground} />
-                                <Ionicons name="car-sport" size={28} color="#064E3B" style={{ marginTop: 6 }} />
-                            </View>
-                            <Text style={styles.svcName} numberOfLines={2}>Auto</Text>
-                        </TouchableOpacity>
-
-                        {/* Cab Economy */}
-                        <TouchableOpacity activeOpacity={0.7} style={styles.svcCard}>
-                            <View style={[styles.svcIconBlock, { backgroundColor: '#F8FAFC' }]}>
-                                <LinearGradient colors={['#E2E8F0', '#CBD5E1']} style={styles.vehicleIllustBackground} />
-                                <Ionicons name="car" size={28} color="#0F172A" style={{ marginTop: 6 }} />
-                            </View>
-                            <Text style={styles.svcName} numberOfLines={2}>Cab{'\n'}Economy</Text>
-                        </TouchableOpacity>
-                    </ScrollView>
-
-                    {/* Promotional Banner */}
-                    <TouchableOpacity activeOpacity={0.9} style={styles.primaryPromoBanner}>
-                        <LinearGradient colors={['#0F172A', '#1E293B']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} />
-                        <View style={{ flex: 1, justifyContent: 'center' }}>
-                            <Text style={styles.promoHeadline}>FIRST AUTO RIDE FREE</Text>
-                            <Text style={styles.promoSub}>offer has been detected.</Text>
-                            <View style={styles.promoCtaBubble}>
-                                <Text style={styles.promoCtaText}>Tap here to apply</Text>
-                            </View>
-                        </View>
-                        <Ionicons name="globe-outline" size={80} color="rgba(255,255,255,0.03)" style={{ position: 'absolute', right: -20, bottom: -20 }} />
-                    </TouchableOpacity>
-
-                    {/* Go Places Section */}
-                    <Text style={[styles.sectionTitle, { marginTop: 24, marginBottom: 16 }]}>Go Places with MM Travels</Text>
+                    <Text style={[styles.sectionTitle, { marginTop: 24, marginBottom: 16, marginHorizontal: 16 }]}>Go Places with MM Travels</Text>
 
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.placesRow}>
 
@@ -209,44 +205,44 @@ const styles = StyleSheet.create({
     },
     sheetBackground: {
         backgroundColor: colors.white,
-        borderTopLeftRadius: 26,
-        borderTopRightRadius: 26,
-        elevation: 20, // Forces sheet ABOVE the map elements!
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        elevation: 20,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: -4 },
-        shadowOpacity: 0.15,
-        shadowRadius: 16,
+        shadowOpacity: 0.1,
+        shadowRadius: 10,
     },
     sheetHandle: {
-        width: 34,
+        width: 36,
         height: 4,
-        backgroundColor: '#E5E7EB',
+        backgroundColor: '#D1D5DB', // subtle gray
         borderRadius: 2,
-        marginTop: 10,
+        marginTop: 8,
     },
     sheetScrollContent: {
-        paddingTop: 10,
+        paddingTop: 6, // minimal gap after handle
     },
     searchBar: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: colors.white,
+        backgroundColor: '#FFFFFF',
         borderWidth: 1,
-        borderColor: '#F3F4F6',
-        borderRadius: 28,
+        borderColor: '#F1F5F9', // extremely subtle border matching reference
+        borderRadius: 24, // perfectly pill-rounded
         marginHorizontal: 16,
         paddingHorizontal: 16,
-        height: 52, // Exact spec height
-        marginBottom: 18,
-        elevation: 1,
+        height: 48, // Rapido specific compact size
+        marginBottom: 16,
+        elevation: 2,
         shadowColor: "#000",
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.04,
-        shadowRadius: 3,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
     },
     searchPlaceholderText: {
-        fontSize: 15, // spec
-        fontWeight: '600', // spec
+        fontSize: 15,
+        fontWeight: '600',
         color: colors.ink,
     },
     sectionHeader: {
@@ -254,91 +250,100 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         alignItems: 'center',
         marginHorizontal: 16,
-        marginBottom: 16,
+        marginBottom: 12,
     },
     sectionTitle: {
         fontSize: 16,
         fontWeight: '700',
         color: colors.ink,
-        paddingRight: 4, // Prevents Android font cutoff on bold layout bounds
+        paddingRight: 4,
     },
     viewAllBtn: {
         flexDirection: 'row',
         alignItems: 'center',
     },
     viewAllText: {
-        fontSize: 12,
-        fontWeight: '600',
+        fontSize: 13,
+        fontWeight: '500',
         color: colors.inkSoft,
         marginRight: 2,
     },
-    svcRow: {
-        paddingLeft: 16, // Matching safe horizontal margin
-        paddingRight: 6,
-        gap: 12,
-        marginBottom: 20,
+    servicesRow: {
+        flexDirection: 'row',
+        paddingHorizontal: 16,
+        justifyContent: 'space-between',
+        marginBottom: 16,
     },
-    svcCard: {
-        width: 76,  // spec width (68-76dp)
+    serviceBlock: {
         alignItems: 'center',
+        width: Dimensions.get('window').width / 4 - 14,
     },
-    svcIconBlock: {
-        width: 62,  // spec container (56-64dp)
-        height: 62,
-        borderRadius: 14,
+    serviceIconFrame: {
+        width: 60,
+        height: 60,
+        borderRadius: 16,
         justifyContent: 'center',
         alignItems: 'center',
-        marginBottom: 8,
         position: 'relative',
-        overflow: 'hidden',
+        marginBottom: 6,
     },
-    vehicleIllustBackground: {
+    serviceIconMock: {
         position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        height: '40%',
-        opacity: 0.15,
+        zIndex: 2,
     },
-    svcName: {
-        fontSize: 12, // spec
+    serviceLabel: {
+        fontSize: 11,
         fontWeight: '600',
         color: colors.ink,
         textAlign: 'center',
         lineHeight: 14,
     },
-    primaryPromoBanner: {
-        width: width - 32,
-        marginHorizontal: 16,
-        height: 76, // Compact height per spec
+    promoBannerContainer: {
+        paddingHorizontal: 14,
+        marginBottom: 10,
+    },
+    promoBannerCard: {
+        backgroundColor: '#0F172A',
         borderRadius: 12,
-        padding: 14,
         flexDirection: 'row',
         overflow: 'hidden',
+        height: 72, // Reduced height per requirements
     },
-    promoHeadline: {
-        fontSize: 14,
-        fontWeight: '900',
-        color: colors.gold,
-        letterSpacing: 0.2,
+    promoBannerContent: {
+        flex: 1,
+        padding: 12,
+        justifyContent: 'center',
     },
-    promoSub: {
-        fontSize: 11,
-        color: '#E2E8F0',
-        marginTop: 2,
-        marginBottom: 8,
-    },
-    promoCtaBubble: {
-        backgroundColor: colors.white,
-        alignSelf: 'flex-start',
-        paddingHorizontal: 10,
-        paddingVertical: 4,
-        borderRadius: 12,
-    },
-    promoCtaText: {
-        fontSize: 9,
+    promoBannerHeadline: {
+        color: '#FBBF24',
+        fontSize: 13,
         fontWeight: '800',
+        letterSpacing: 0.5,
+        marginBottom: 2,
+    },
+    promoBannerSubtext: {
+        color: colors.white,
+        fontSize: 11,
+        marginBottom: 6,
+        fontWeight: '400',
+    },
+    promoBadge: {
+        backgroundColor: colors.white,
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 12,
+        alignSelf: 'flex-start',
+    },
+    promoBadgeText: {
         color: colors.ink,
+        fontSize: 10,
+        fontWeight: '700',
+    },
+    promoBannerGraphic: {
+        width: 80,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: '#1E293B', // subtle map-like dark shade
     },
     placesRow: {
         paddingLeft: 16,

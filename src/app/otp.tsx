@@ -1,9 +1,11 @@
 import { BackHeader } from '@/components/ui/BackHeader';
 import { Button } from '@/components/ui/Button';
 import { colors, spacing } from '@/constants/theme';
-import { useRouter } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useRef, useState } from 'react';
 import {
+    Image,
     KeyboardAvoidingView,
     Platform,
     Pressable,
@@ -20,8 +22,12 @@ const RESEND_COOLDOWN = 45;
 
 export default function OTPScreen() {
     const router = useRouter();
+    // Retrieve phone dynamically from previous screen
+    const { phone } = useLocalSearchParams<{ phone: string }>();
+
     const [code, setCode] = useState('');
     const [timeLeft, setTimeLeft] = useState(RESEND_COOLDOWN);
+    const [isVerifying, setIsVerifying] = useState(false);
     const inputRef = useRef<TextInput>(null);
 
     // Focus the hidden input automatically
@@ -42,20 +48,64 @@ export default function OTPScreen() {
         return () => clearInterval(intervalId);
     }, [timeLeft]);
 
-    const handleResend = () => {
+    const handleResend = async () => {
         if (timeLeft > 0) return;
-        // Trigger API resend here
-        setTimeLeft(RESEND_COOLDOWN);
-        inputRef.current?.focus();
+
+        try {
+            let baseUrl = process.env.EXPO_PUBLIC_API_URL as string;
+            if (!baseUrl || baseUrl === 'undefined') baseUrl = 'http://10.200.240.61:5000';
+            await fetch(`${baseUrl}/api/auth/send-whatsapp-otp`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ phone }),
+            });
+            setTimeLeft(RESEND_COOLDOWN);
+            inputRef.current?.focus();
+        } catch (e) {
+            alert('Failed to resend WhatsApp OTP');
+        }
     };
 
-    const handleVerify = () => {
-        // Complete onboarding / verify OTP
-        // Navigate to A5 Profile Registration Screen
-        router.replace('/profile-registration');
+    const handleVerify = async () => {
+        setIsVerifying(true);
+        try {
+            let baseUrl = process.env.EXPO_PUBLIC_API_URL as string;
+            if (!baseUrl || baseUrl === 'undefined') baseUrl = 'http://10.200.240.61:5000';
+            const response = await fetch(`${baseUrl}/api/auth/verify-otp`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ phone, code }),
+            });
+
+            const data = await response.json();
+            setIsVerifying(false);
+
+            if (response.ok) {
+                // Securely save the session token so they don't have to login tomorrow
+                await AsyncStorage.setItem('userToken', data.token);
+
+                // Dynamically route: If new user -> profile-reg, else -> home (mocked logic)
+                if (data.isNewUser) {
+                    router.replace({
+                        pathname: '/profile-registration',
+                        params: { phone }
+                    });
+                } else {
+                    router.replace('/(tabs)');
+                }
+            } else {
+                alert(data.error || 'Invalid OTP');
+                setCode('');
+                inputRef.current?.focus();
+            }
+        } catch (error) {
+            setIsVerifying(false);
+            console.log(error);
+            alert('Cannot connect to validation server');
+        }
     };
 
-    const isComplete = code.length === OTP_LENGTH;
+    const isComplete = code.length === OTP_LENGTH && !isVerifying;
 
     // The hidden input handler
     const renderOTPBoxes = () => {
@@ -93,13 +143,22 @@ export default function OTPScreen() {
                 <BackHeader title="Verify your number" />
 
                 <View style={styles.content}>
+                    {/* Illustration Zone added from splash style request */}
+                    <View style={styles.centerStage}>
+                        <Image
+                            source={require('../../assets/images/icon.png')}
+                            style={styles.logoImage}
+                            resizeMode="cover"
+                        />
+                    </View>
+
                     {/* Subcopy Section */}
                     <View style={styles.subcopyContainer}>
                         <Text style={styles.subcopyText}>
-                            Enter the {OTP_LENGTH}-digit code sent to
+                            Enter the {OTP_LENGTH}-digit code sent via WhatsApp to
                         </Text>
                         <View style={styles.phoneRow}>
-                            <Text style={styles.phoneText}>+91 98765 43210</Text>
+                            <Text style={styles.phoneText}>+91 {phone || '...'} </Text>
                             <TouchableOpacity onPress={() => router.back()}>
                                 <Text style={styles.editText}>Edit</Text>
                             </TouchableOpacity>
@@ -172,7 +231,17 @@ const styles = StyleSheet.create({
     content: {
         flex: 1,
         paddingHorizontal: spacing.screenPadX,
-        paddingTop: 32,
+        paddingTop: 16,
+    },
+    centerStage: {
+        alignItems: 'center',
+        marginVertical: 24,
+    },
+    logoImage: {
+        width: 200,
+        height: 200,
+        borderRadius: 100,
+        overflow: 'hidden',
     },
     subcopyContainer: {
         marginBottom: 32,

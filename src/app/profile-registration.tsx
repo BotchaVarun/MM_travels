@@ -3,8 +3,9 @@ import { Button } from '@/components/ui/Button';
 import { InputField } from '@/components/ui/InputField';
 import { colors, spacing } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import * as Location from 'expo-location';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useState } from 'react';
 import {
     KeyboardAvoidingView,
     Platform,
@@ -20,6 +21,8 @@ type GenderOption = 'Male' | 'Female' | 'Other' | null;
 
 export default function ProfileRegistrationScreen() {
     const router = useRouter();
+    const { phone } = useLocalSearchParams<{ phone: string }>();
+
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [gender, setGender] = useState<GenderOption>(null);
@@ -27,15 +30,52 @@ export default function ProfileRegistrationScreen() {
     const [emergencyName, setEmergencyName] = useState('');
     const [emergencyPhone, setEmergencyPhone] = useState('');
 
+    const [isSaving, setIsSaving] = useState(false);
+
     // Validate required fields (Full name, emergency contact details are mandatory as per spec)
     const isFormValid =
         name.trim().length > 0 &&
         emergencyName.trim().length > 0 &&
-        emergencyPhone.trim().length === 10;
+        emergencyPhone.trim().length === 10 &&
+        !isSaving;
 
-    const handleSave = () => {
-        // Save profile to API, route to KYC
-        router.push('/kyc');
+    const handleSave = async () => {
+        setIsSaving(true);
+        try {
+            let baseUrl = process.env.EXPO_PUBLIC_API_URL as string;
+            if (!baseUrl || baseUrl === 'undefined') baseUrl = 'http://10.200.240.61:5000';
+            const response = await fetch(`${baseUrl}/api/users/profile`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    phone,
+                    fullName: name,
+                    email,
+                    gender,
+                    emergencyName,
+                    emergencyPhone
+                })
+            });
+
+            const data = await response.json();
+            setIsSaving(false);
+
+            if (response.ok) {
+                // Save profile successfully, bypass KYC and check permissions immediately
+                const { status } = await Location.getForegroundPermissionsAsync();
+                if (status === 'granted') {
+                    router.replace('/(tabs)');
+                } else {
+                    router.replace('/permissions');
+                }
+            } else {
+                alert(data.error || 'Failed to save profile. Ensure the database is running!');
+            }
+        } catch (error) {
+            setIsSaving(false);
+            alert('Cannot connect to your local backend securely. Try restarting your server.');
+            console.log(error);
+        }
     };
 
     const renderGenderSegment = (label: GenderOption) => {
@@ -125,7 +165,7 @@ export default function ProfileRegistrationScreen() {
                 {/* Floating CTA Footer */}
                 <View style={styles.footer}>
                     <Button
-                        label="Save & Continue"
+                        label={isSaving ? "Saving..." : "Save & Continue"}
                         variant="gold"
                         disabled={!isFormValid}
                         onPress={handleSave}
